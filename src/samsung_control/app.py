@@ -2,6 +2,7 @@ import json
 import logging
 import math
 import os
+import pwd
 import subprocess
 import sys
 import time
@@ -11,7 +12,7 @@ from pathlib import Path
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from .i18n import TRANSLATIONS
-from .widgets import BatteryIcon, CPUIcon, FanIcon, FanSpeedGraph, TimeSeriesGraph
+from .widgets import BatteryIcon, CPUIcon, FanIcon, FanSpeedGraph, TimeSeriesGraph, BatteryThresholdSlider
 
 
 class SamsungControl(Adw.Application):
@@ -368,6 +369,53 @@ class SamsungControl(Adw.Application):
         row.set_child(box)
         return row
 
+    def create_battery_threshold_row(self):
+        """Create Battery Threshold row with custom slider"""
+        row = Gtk.ListBoxRow()
+        row.set_selectable(False)
+        
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.set_margin_top(12)
+        box.set_margin_bottom(12)
+        box.set_margin_start(12)
+        box.set_margin_end(12)
+
+        # Title and subtitle
+        header_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        title_label = Gtk.Label(label=self.t("battery_threshold"), xalign=0)
+        title_label.add_css_class("heading")
+        subtitle_label = Gtk.Label(label=self.t("battery_threshold_desc"), xalign=0)
+        subtitle_label.add_css_class("subtitle")
+        
+        header_box.append(title_label)
+        header_box.append(subtitle_label)
+        box.append(header_box)
+
+        # Slider
+        slider = BatteryThresholdSlider()
+        
+        # Read current value
+        current_value = self.read_value("charge_control_end_threshold")
+        if current_value:
+            try:
+                slider.set_value(int(current_value))
+            except Exception as e:
+                logging.warning(f"Could not set initial battery threshold: {e}")
+                slider.set_value(80)
+        else:
+            slider.set_value(80)
+
+        # Connect value change
+        def on_threshold_changed(new_value):
+            self.write_value("charge_control_end_threshold", str(new_value))
+            logging.info(f"Battery threshold changed to: {new_value}")
+
+        slider.connect_value_changed(on_threshold_changed)
+        box.append(slider)
+
+        row.set_child(box)
+        return row
+
     def create_spinbutton_row(self, title, subtitle, attr, min_val, max_val):
         # Use the new method to get the path
         full_path = self.get_attribute_path(attr)
@@ -582,43 +630,94 @@ class SamsungControl(Adw.Application):
         sidebar.set_hexpand(False)
         sidebar.add_css_class("sidebar")
 
-        # Title
-        title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        title_box.set_margin_top(16)
-        title_box.set_margin_bottom(16)
-        title_box.set_margin_start(16)
-        title_box.set_margin_end(16)
+        # User profile header
+        profile_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        profile_box.set_margin_top(16)
+        profile_box.set_margin_bottom(16)
+        profile_box.set_margin_start(16)
+        profile_box.set_margin_end(16)
 
-        title_label = Gtk.Label(label=self.t("app_title"))
-        title_label.add_css_class("sidebar-title")
-        title_box.append(title_label)
+        # Get current user info
+        try:
+            current_user = pwd.getpwuid(os.getuid())
+            username = current_user.pw_name
+            user_gecos = current_user.pw_gecos or username
+            
+            # Try to load user avatar
+            home_dir = current_user.pw_dir
+            avatar_paths = [
+                os.path.join(home_dir, ".face"),
+                os.path.join(home_dir, ".face.icon"),
+                f"/var/lib/AccountsService/icons/{username}",
+            ]
+            
+            avatar_image = None
+            for avatar_path in avatar_paths:
+                if os.path.exists(avatar_path):
+                    try:
+                        avatar_image = Gtk.Image.new_from_file(avatar_path)
+                        avatar_image.set_size_request(48, 48)
+                        avatar_image.add_css_class("user-avatar-image")
+                        break
+                    except Exception:
+                        pass
+        except Exception as e:
+            logging.warning(f"Could not get user info: {e}")
+            username = "User"
+            user_gecos = "User"
+            avatar_image = None
 
-        subtitle_label = Gtk.Label(label=self.t("app_subtitle"))
-        subtitle_label.add_css_class("sidebar-subtitle")
-        title_box.append(subtitle_label)
+        # Avatar container
+        avatar_container = Gtk.Box()
+        avatar_container.set_size_request(48, 48)
+        avatar_container.add_css_class("user-avatar")
+        
+        if avatar_image:
+            avatar_image.set_size_request(48, 48)
+            avatar_container.append(avatar_image)
+        else:
+            # Fallback: show initials or default icon
+            fallback_label = Gtk.Label(label=user_gecos[0].upper() if user_gecos else "U")
+            fallback_label.add_css_class("user-avatar-text")
+            avatar_container.append(fallback_label)
 
-        sidebar.append(title_box)
+        # User info
+        user_info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        user_name_label = Gtk.Label(label=user_gecos)
+        user_name_label.add_css_class("user-name")
+        user_name_label.set_xalign(0)
+        
+        user_status_label = Gtk.Label(label="Profile • User")
+        user_status_label.add_css_class("user-status")
+        user_status_label.set_xalign(0)
+        
+        user_info_box.append(user_name_label)
+        user_info_box.append(user_status_label)
+        
+        profile_box.append(avatar_container)
+        profile_box.append(user_info_box)
+        sidebar.append(profile_box)
 
         # Separator
         separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
         sidebar.append(separator)
 
-        # Menu items (use app-provided icons)
+        # Menu items (use app-provided icons) - with descriptions
         menu_items = [
-            ("battery", self.t("menu_battery_perf"), "samsung-battery"),
-            ("advanced", self.t("menu_advanced"), "samsung-settings"),
-            ("monitor", self.t("menu_monitor"), "samsung-graph"),
+            ("battery", self.t("menu_battery_perf"), "samsung-battery", "Performance mode, battery threshold"),
+            ("advanced", self.t("menu_advanced"), "samsung-settings", "Quick settings, keyboard light"),
+            ("monitor", self.t("menu_monitor"), "samsung-graph", "Fan speed, CPU, battery info"),
         ]
 
-        for page_name, label, icon_name in menu_items:
-            button = self.create_sidebar_button(label, icon_name, page_name)
+        for page_name, label, icon_name, description in menu_items:
+            button = self.create_sidebar_button(label, icon_name, page_name, description)
             sidebar.append(button)
 
         sidebar.set_vexpand(True)
         return sidebar
 
-    def create_sidebar_button(self, label, icon_name, page_name):
-        """Create a sidebar navigation button"""
+    def create_sidebar_button(self, label, icon_name, page_name, description=""):
+        """Create a sidebar navigation button with label and description"""
         button = Gtk.Button()
         button.set_hexpand(True)
         button.add_css_class("sidebar-button")
@@ -668,14 +767,27 @@ class SamsungControl(Adw.Application):
             except:
                 pass
 
-        # Label (to the right of icon)
+        # Label and description (to the right of icon)
+        label_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        
         label_widget = Gtk.Label(label=label)
         label_widget.add_css_class("sidebar-label")
         label_widget.set_justify(Gtk.Justification.LEFT)
         label_widget.set_wrap(False)
+        
+        if description:
+            desc_widget = Gtk.Label(label=description)
+            desc_widget.add_css_class("sidebar-description")
+            desc_widget.set_justify(Gtk.Justification.LEFT)
+            desc_widget.set_wrap(True)
+            desc_widget.set_xalign(0)
+            label_box.append(label_widget)
+            label_box.append(desc_widget)
+        else:
+            label_box.append(label_widget)
 
         box.append(icon_container)
-        box.append(label_widget)
+        box.append(label_box)
         button.set_child(box)
 
         button.connect("clicked", lambda b: self.content_stack.set_visible_child_name(page_name))
@@ -688,35 +800,28 @@ class SamsungControl(Adw.Application):
         scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scrolled.add_css_class("page-content")
 
-        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         content.set_margin_top(24)
         content.set_margin_bottom(24)
         content.set_margin_start(24)
         content.set_margin_end(24)
 
-        # Title
-        title = Gtk.Label(label=self.t("page_battery_perf"))
-        title.add_css_class("page-title")
-        content.append(title)
+        # Battery controls - Card 1: Battery Threshold
+        controls_box1 = Gtk.ListBox()
+        controls_box1.add_css_class("boxed-list")
+        controls_box1.set_selection_mode(Gtk.SelectionMode.NONE)
 
-        # Battery controls
-        controls_box = Gtk.ListBox()
-        controls_box.add_css_class("boxed-list")
-        controls_box.set_selection_mode(Gtk.SelectionMode.NONE)
+        controls_box1.append(self.create_battery_threshold_row())
 
-        # Battery Threshold
-        controls_box.append(
-            self.create_spinbutton_row(
-                self.t("battery_threshold"),
-                self.t("battery_threshold_desc"),
-                "charge_control_end_threshold",
-                0,
-                100,
-            )
-        )
+        card1 = self.create_card(controls_box1)
+        content.append(card1)
 
-        # USB Charging
-        controls_box.append(
+        # Card 2: USB Charging
+        controls_box2 = Gtk.ListBox()
+        controls_box2.add_css_class("boxed-list")
+        controls_box2.set_selection_mode(Gtk.SelectionMode.NONE)
+
+        controls_box2.append(
             self.create_switch_row(
                 self.t("usb_charging"),
                 self.t("usb_charging_desc"),
@@ -724,8 +829,10 @@ class SamsungControl(Adw.Application):
             )
         )
 
-        # Performance Mode (expanded)
-        performance_row = Gtk.ListBoxRow()
+        card2 = self.create_card(controls_box2)
+        content.append(card2)
+
+        # Card 3: Performance Mode
         perf_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         perf_box.set_margin_top(12)
         perf_box.set_margin_bottom(12)
@@ -769,11 +876,8 @@ class SamsungControl(Adw.Application):
             self.profile_radio_group = first_radio
             perf_box.append(profiles_box)
 
-        performance_row.set_child(perf_box)
-        controls_box.append(performance_row)
-
-        card = self.create_card(controls_box)
-        content.append(card)
+        card3 = self.create_card(perf_box)
+        content.append(card3)
 
         scrolled.set_child(content)
         return scrolled
@@ -791,47 +895,55 @@ class SamsungControl(Adw.Application):
         scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scrolled.add_css_class("page-content")
 
-        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         content.set_margin_top(24)
         content.set_margin_bottom(24)
         content.set_margin_start(24)
         content.set_margin_end(24)
 
-        # Title
-        title = Gtk.Label(label=self.t("page_advanced"))
-        title.add_css_class("page-title")
-        content.append(title)
+        # Card 1: Language
+        controls_box1 = Gtk.ListBox()
+        controls_box1.add_css_class("boxed-list")
+        controls_box1.set_selection_mode(Gtk.SelectionMode.NONE)
+        controls_box1.append(self.create_language_row())
+        card1 = self.create_card(controls_box1)
+        content.append(card1)
 
-        # Controls
-        controls_box = Gtk.ListBox()
-        controls_box.add_css_class("boxed-list")
-        controls_box.set_selection_mode(Gtk.SelectionMode.NONE)
-
-        # Language
-        controls_box.append(self.create_language_row())
-
-        # Start on Lid Open
-        controls_box.append(
+        # Card 2: Start on Lid Open
+        controls_box2 = Gtk.ListBox()
+        controls_box2.add_css_class("boxed-list")
+        controls_box2.set_selection_mode(Gtk.SelectionMode.NONE)
+        controls_box2.append(
             self.create_switch_row(
                 self.t("start_on_lid"),
                 self.t("start_on_lid_desc"),
                 "start_on_lid_open",
             )
         )
+        card2 = self.create_card(controls_box2)
+        content.append(card2)
 
-        # Allow Recording
-        controls_box.append(
+        # Card 3: Allow Recording
+        controls_box3 = Gtk.ListBox()
+        controls_box3.add_css_class("boxed-list")
+        controls_box3.set_selection_mode(Gtk.SelectionMode.NONE)
+        controls_box3.append(
             self.create_switch_row(
                 self.t("allow_recording"),
                 self.t("allow_recording_desc"),
                 "allow_recording",
             )
         )
+        card3 = self.create_card(controls_box3)
+        content.append(card3)
 
-        # Keyboard Backlight
+        # Card 4: Keyboard Backlight
         if self.has_kbd_backlight():
             max_brightness = self.read_kbd_backlight_max()
-            controls_box.append(
+            controls_box4 = Gtk.ListBox()
+            controls_box4.add_css_class("boxed-list")
+            controls_box4.set_selection_mode(Gtk.SelectionMode.NONE)
+            controls_box4.append(
                 self.create_scale_row(
                     self.t("kbd_backlight"),
                     self.t("kbd_backlight_desc"),
@@ -840,9 +952,8 @@ class SamsungControl(Adw.Application):
                     max_brightness,
                 )
             )
-
-        card = self.create_card(controls_box)
-        content.append(card)
+            card4 = self.create_card(controls_box4)
+            content.append(card4)
 
         scrolled.set_child(content)
         return scrolled
@@ -858,11 +969,6 @@ class SamsungControl(Adw.Application):
         content.set_margin_bottom(24)
         content.set_margin_start(24)
         content.set_margin_end(24)
-
-        # Title
-        title = Gtk.Label(label=self.t("page_monitor"))
-        title.add_css_class("page-title")
-        content.append(title)
 
         # Menu para selecionar entre Battery, CPU Usage, Fan Speed
         menu_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -1298,7 +1404,7 @@ class SamsungControl(Adw.Application):
         css = """
             /* Sidebar Styling */
             .sidebar {
-                background: alpha(@card_bg_color, 0.95);
+                background: transparent;
                 border-right: 1px solid alpha(@borders, 0.3);
             }
 
@@ -1313,6 +1419,34 @@ class SamsungControl(Adw.Application):
                 font-size: 18px;
                 color: @accent_bg_color;
                 margin-top: -3px;
+            }
+
+            /* User Profile Header */
+            .user-avatar {
+                min-width: 48px;
+                min-height: 48px;
+                border-radius: 50%;
+                background: alpha(@accent_bg_color, 0.15);
+                color: @accent_bg_color;
+                font-weight: 600;
+                font-size: 18px;
+            }
+
+            .user-avatar-text {
+                font-weight: 600;
+                font-size: 18px;
+                color: @accent_bg_color;
+            }
+
+            .user-name {
+                font-weight: 600;
+                font-size: 15px;
+                color: @card_fg_color;
+            }
+
+            .user-status {
+                font-size: 12px;
+                color: alpha(@card_fg_color, 0.6);
             }
 
             .sidebar-button {
@@ -1352,18 +1486,19 @@ class SamsungControl(Adw.Application):
 
             .sidebar-label {
                 font-weight: 600;
-                font-size: 15px;
+                font-size: 16px;
                 color: @card_fg_color;
+            }
+
+            .sidebar-description {
+                font-weight: 400;
+                font-size: 12px;
+                color: alpha(@card_fg_color, 0.65);
+                margin-top: 2px;
             }
 
             .sidebar-button:hover .sidebar-icon {
                 transform: scale(1.05);
-            }
-
-            .sidebar-label {
-                font-weight: 600;
-                font-size: 14px;
-                color: @card_fg_color;
             }
 
             /* Page Content */
@@ -1385,6 +1520,15 @@ class SamsungControl(Adw.Application):
                 padding: 0;
                 margin: 0;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            }
+
+            .card listbox {
+                background: transparent;
+            }
+
+            .card listbox row {
+                padding: 0;
+                margin: 0;
             }
 
             .heading {
@@ -1418,11 +1562,24 @@ class SamsungControl(Adw.Application):
 
             .control-box {
                 background: transparent;
-                padding: 12px;
+                padding: 8px 12px;
+                margin: 0;
             }
 
             .boxed-list {
                 background: transparent;
+                margin: 0;
+                padding: 0;
+            }
+
+            .boxed-list row {
+                padding: 0;
+                margin: 0;
+                border-bottom: 1px solid alpha(@borders, 0.1);
+            }
+
+            .boxed-list row:last-child {
+                border-bottom: none;
             }
 
             .dashboard-title {

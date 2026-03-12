@@ -377,3 +377,162 @@ class CPUIcon(Gtk.DrawingArea):
         cr.set_line_width(2)
         cr.rectangle(-size - 4, -size - 4, size * 2 + 8, size * 2 + 8)
         cr.stroke()
+
+
+class BatteryThresholdSlider(Gtk.DrawingArea):
+    """Custom slider for battery threshold with visual marks and tooltip"""
+    
+    def __init__(self):
+        super().__init__()
+        self.set_size_request(400, 80)
+        self.set_draw_func(self.draw)
+        self.set_can_focus(True)
+        
+        self.min_value = 80
+        self.max_value = 100
+        self.current_value = 80
+        self.marks = [80, 85, 90, 95, 100]
+        self.dragging = False
+        self.show_tooltip = False
+        self.tooltip_value = ""
+        
+        # Event controllers
+        self.drag_controller = Gtk.GestureDrag.new()
+        self.drag_controller.connect("drag-begin", self.on_drag_begin)
+        self.drag_controller.connect("drag-update", self.on_drag_update)
+        self.drag_controller.connect("drag-end", self.on_drag_end)
+        self.add_controller(self.drag_controller)
+        
+        self.motion_controller = Gtk.EventControllerMotion.new()
+        self.motion_controller.connect("leave", self.on_mouse_leave)
+        self.add_controller(self.motion_controller)
+        
+        self.callback = None
+    
+    def set_value(self, value):
+        value = max(self.min_value, min(self.max_value, value))
+        if self.current_value != value:
+            self.current_value = value
+            self.queue_draw()
+    
+    def get_value(self):
+        return self.current_value
+    
+    def connect_value_changed(self, callback):
+        self.callback = callback
+    
+    def on_drag_begin(self, gesture, offset_x, offset_y):
+        self.dragging = True
+        self.show_tooltip = True
+        # Don't update value here, just start dragging
+        self.queue_draw()
+    
+    def on_drag_update(self, gesture, offset_x, offset_y):
+        if self.dragging:
+            self.update_value_from_position(offset_x)
+            self.queue_draw()
+    
+    def on_drag_end(self, gesture, offset_x, offset_y):
+        self.dragging = False
+        self.show_tooltip = False
+        self.queue_draw()
+    
+    def on_mouse_leave(self, controller):
+        if not self.dragging:
+            self.show_tooltip = False
+            self.queue_draw()
+    
+    def update_value_from_position(self, x):
+        width = self.get_width()
+        slider_width = width - 40  # Padding on both sides
+        slider_x = 20
+        
+        if slider_width > 0:
+            relative_x = max(0, min(x - slider_x, slider_width))
+            ratio = relative_x / slider_width
+            new_value = self.min_value + ratio * (self.max_value - self.min_value)
+            new_value = round(new_value)
+            
+            if new_value != self.current_value:
+                self.current_value = max(self.min_value, min(self.max_value, new_value))
+                self.tooltip_value = f"{self.current_value}%"
+                if self.callback:
+                    self.callback(self.current_value)
+    
+    def draw(self, area, cr, width, height, *args):
+        slider_y = height // 2
+        slider_width = width - 40
+        slider_x = 20
+        
+        # Draw background track
+        cr.set_source_rgba(0.3, 0.3, 0.3, 0.5)
+        cr.set_line_width(4)
+        cr.move_to(slider_x, slider_y)
+        cr.line_to(slider_x + slider_width, slider_y)
+        cr.stroke()
+        
+        # Draw filled track up to current value
+        ratio = (self.current_value - self.min_value) / (self.max_value - self.min_value)
+        filled_width = slider_width * ratio
+        cr.set_source_rgb(0.2, 0.4, 1.0)
+        cr.set_line_width(4)
+        cr.move_to(slider_x, slider_y)
+        cr.line_to(slider_x + filled_width, slider_y)
+        cr.stroke()
+        
+        # Draw marks
+        mark_height = 8
+        for mark in self.marks:
+            mark_ratio = (mark - self.min_value) / (self.max_value - self.min_value)
+            mark_x = slider_x + slider_width * mark_ratio
+            
+            cr.set_source_rgba(0.6, 0.6, 0.6, 0.7)
+            cr.set_line_width(2)
+            cr.move_to(mark_x, slider_y - mark_height)
+            cr.line_to(mark_x, slider_y + mark_height)
+            cr.stroke()
+            
+            # Draw mark label
+            cr.set_source_rgba(0.7, 0.7, 0.7, 0.8)
+            cr.set_font_size(10)
+            label = f"{mark}%"
+            (x_bearing, y_bearing, text_width, text_height, x_advance, y_advance) = cr.text_extents(label)
+            cr.move_to(mark_x - text_width / 2, slider_y + mark_height + 18)
+            cr.show_text(label)
+        
+        # Draw thumb/handle
+        thumb_x = slider_x + filled_width
+        thumb_radius = 8
+        cr.set_source_rgb(0.2, 0.4, 1.0)
+        cr.arc(thumb_x, slider_y, thumb_radius, 0, 2 * math.pi)
+        cr.fill()
+        
+        # Draw thumb border
+        cr.set_source_rgba(0.2, 0.4, 1.0, 0.3)
+        cr.set_line_width(2)
+        cr.arc(thumb_x, slider_y, thumb_radius + 4, 0, 2 * math.pi)
+        cr.stroke()
+        
+        # Draw tooltip when dragging
+        if self.show_tooltip and self.dragging:
+            tooltip_x = thumb_x
+            tooltip_y = slider_y - 30
+            
+            # Tooltip box
+            cr.set_source_rgba(0.2, 0.4, 1.0, 0.9)
+            cr.rectangle(tooltip_x - 20, tooltip_y - 15, 40, 20)
+            cr.fill()
+            
+            # Tooltip border
+            cr.set_source_rgb(0.2, 0.4, 1.0)
+            cr.set_line_width(1)
+            cr.rectangle(tooltip_x - 20, tooltip_y - 15, 40, 20)
+            cr.stroke()
+            
+            # Tooltip text
+            cr.set_source_rgb(1, 1, 1)
+            cr.set_font_size(12)
+            label = f"{self.current_value}%"
+            (x_bearing, y_bearing, text_width, text_height, x_advance, y_advance) = cr.text_extents(label)
+            cr.move_to(tooltip_x - text_width / 2, tooltip_y + text_height / 2)
+            cr.show_text(label)
