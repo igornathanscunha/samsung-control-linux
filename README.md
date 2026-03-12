@@ -16,20 +16,39 @@ features and hardware settings.
 
 ## Kernel support and dependencies
 
-The UI communicates with the Samsung platform driver exposed by the kernel at
-`/dev/samsung-galaxybook`.  That driver is included in **mainline Linux as of
-6.15**; if you are running an older kernel you will need the
+The UI communicates with the Samsung platform driver exposed by the kernel.
+That driver is included in **mainline Linux as of 6.15**; if you are running
+an older kernel you will need the
 [`samsung-galaxybook-extras`](https://github.com/joshuagrisham/samsung-galaxybook-extras)
 module.  The extra module is considered a stop‑gap and is unnecessary on
-kernels ≥ 6.15.
+kernels ≥ 6.15.
 
-When present, the kernel driver provides the following features:
+### Hardware interface locations
+
+The kernel exposes Samsung hardware controls through different interfaces,
+and their locations may vary across kernel versions:
+
+- **Device nodes:** `/dev/samsung-galaxybook/` (kernel 6.15–6.16)
+- **Firmware attributes:** `/sys/class/firmware-attributes/samsung-galaxybook/` (kernel 6.17+)
+- **LED subsystem:** `/sys/class/leds/samsung-galaxybook::*` (keyboard backlight)
+- **Power supply:** `/sys/class/power_supply/BAT1/` (battery info)
+
+The application automatically probes multiple paths to find available
+interfaces, so it should work across kernel versions even if the exact
+interface locations change.  If features are missing or fail, check the
+application logs and verify that the kernel driver is loaded.
+
+### Available features
+
+When the kernel driver is present, the following controls are available:
 
 - ACPI interaction with Samsung's SCAI device
-- Keyboard backlight control
-- Battery threshold and USB charge switching
-- Performance profile management
+- Keyboard backlight brightness
+- Battery charge threshold
+- USB charging when powered off
+- Lid-open power on/off control
 - Camera/microphone block/allow
+- Performance profile selection
 
 Use the features at your own discretion.  On modern kernels the driver is
 built‑in and maintained upstream; on older kernels you are relying on the
