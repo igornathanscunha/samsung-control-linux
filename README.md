@@ -71,18 +71,13 @@ git submodule update --init
 
 ### 2. Install Components
 
-First, install the kernel module:
+Before installing the GUI, make sure the `samsung-galaxybook` kernel module is present on your system. You can build it from the
+[samsung-galaxybook-extras](https://github.com/joshuagrisham/samsung-galaxybook-extras) repository or install a prebuilt package from your
+distribution.
+
+To install the application itself, simply run the installer script located at the project root:
 
 ```bash
-sudo ./install-extras.sh
-```
-
-#### Or follow the instructions from the [samsung-galaxybook-extras](https://github.com/joshuagrisham/samsung-galaxybook-extras) repository
-
-Then, install the Samsung Settings application:
-
-```bash
-cd samsung-control
 sudo ./install.sh
 ```
 

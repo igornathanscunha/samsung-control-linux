@@ -176,13 +176,13 @@ EOL
 
 chmod +x /usr/local/bin/samsung-control-wrapper
 
-# Copy program
-install -Dm755 "$SCRIPT_DIR/samsung-control.py" /usr/local/bin/samsung-control
+# Copy program (source files are now under src/ when script is in project root)
+install -Dm755 "$SCRIPT_DIR/src/samsung-control.py" /usr/local/bin/samsung-control
 install -d /usr/local/bin/samsung_control
-cp -r "$SCRIPT_DIR/samsung_control/"* /usr/local/bin/samsung_control/
+cp -r "$SCRIPT_DIR/src/samsung_control/"* /usr/local/bin/samsung_control/
 
-# Install icons (now stored under assets/)
-ICON_DIR="$SCRIPT_DIR/../assets/icons"
+# Install icons (now stored under assets/ at repository root)
+ICON_DIR="$SCRIPT_DIR/assets/icons"
 install -Dm644 "$ICON_DIR/samsung-control.svg" /usr/share/icons/hicolor/scalable/apps/samsung-control.svg
 install -Dm644 "$ICON_DIR/battery.svg" /usr/share/icons/hicolor/scalable/apps/samsung-battery.svg
 install -Dm644 "$ICON_DIR/settings.svg" /usr/share/icons/hicolor/scalable/apps/samsung-settings.svg
