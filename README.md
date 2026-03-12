@@ -73,7 +73,8 @@ work offline.
   - Lid‑open power on/off
   - Camera/mic access block/allow
   - Performance mode selection
-
+- Appearance control
+  - Light / Dark / Automatic theme, selectable under Advanced Features
 ## Performance Profiles Analysis (Geekbench 6)
 
 | Mode | Single-Core | Multi-Core | Notes |

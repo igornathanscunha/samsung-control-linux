@@ -42,9 +42,22 @@ class SamsungControl(Adw.Application):
     def __init__(self):
         super().__init__(application_id="org.samsung.control")
 
-        # Set color scheme to prefer dark
+        # Style manager will be used for theme switching; default to system preference
         self.style_manager = Adw.StyleManager.get_default()
-        self.style_manager.set_color_scheme(Adw.ColorScheme.FORCE_DARK)
+        scheme = self._get_auto_scheme()
+        if scheme is not None:
+            self.style_manager.set_color_scheme(scheme)
+
+        # Toplevel window is created on activate; used to attach scheme classes
+        # for CSS that shouldn't depend on libadwaita-internal selectors.
+        self.window = None
+        self._theme_choice = "auto"
+        self._switch_status_labels = {}
+
+        try:
+            self.style_manager.connect("notify::dark", self._on_style_manager_dark_changed)
+        except Exception:
+            pass
 
         self.connect("activate", self.on_activate)
 
@@ -52,6 +65,8 @@ class SamsungControl(Adw.Application):
         settings = self.load_settings()
         if settings.get("language") in TRANSLATIONS:
             self.language = settings["language"]
+        if settings.get("theme") in ("auto", "light", "dark"):
+            self._theme_choice = settings["theme"]
 
         # Base paths
         self.base_path = "/dev/samsung-galaxybook"
@@ -330,21 +345,35 @@ class SamsungControl(Adw.Application):
         label_box.append(title_label)
         label_box.append(subtitle_label)
 
+        status_label = Gtk.Label(label="", xalign=0)
+        status_label.add_css_class("subtitle")
+        status_label.set_visible(False)
+
         switch = Gtk.Switch()
         switch.set_valign(Gtk.Align.CENTER)
         switch.add_css_class("samsung-switch")
 
+        settings = self.load_settings()
+        has_saved = isinstance(settings.get(attr), bool)
+        if has_saved:
+            switch.set_active(bool(settings[attr]))
+
         current_value = self.read_value(attr)
         if current_value is not None:
-            switch.set_active(current_value == "1")
-            logging.info(f"Switch for {attr} initialized to {current_value == '1'}")
+            kernel_active = current_value == "1"
+            if not has_saved:
+                switch.set_active(kernel_active)
+            logging.info(f"Switch for {attr} initialized to {switch.get_active()} (kernel={kernel_active})")
         else:
             logging.warning(f"Could not read current value for {attr}")
+
+        self._switch_status_labels[attr] = status_label
 
         switch.connect("notify::active", self.on_switch_activated, attr)
 
         box.append(label_box)
         box.append(switch)
+        box.append(status_label)
         row.set_child(box)
         return row
 
@@ -416,6 +445,7 @@ class SamsungControl(Adw.Application):
 
         # Slider
         slider = BatteryThresholdSlider()
+        slider.add_css_class("battery-threshold-slider")
         
         # Read current value
         current_value = self.read_value("charge_control_end_threshold")
@@ -610,6 +640,14 @@ class SamsungControl(Adw.Application):
             settings = self.load_settings()
             settings[attr] = switch.get_active()
             self.save_settings(settings)
+
+            status_label = self._switch_status_labels.get(attr)
+            if status_label:
+                if result == "permission_denied":
+                    status_label.set_text(self.t("saved_not_applied"))
+                    status_label.set_visible(True)
+                else:
+                    status_label.set_visible(False)
             
             if result is not True:
                 # Write to kernel failed, but configuration was saved
@@ -955,6 +993,14 @@ class SamsungControl(Adw.Application):
         controls_box1.append(self.create_language_row())
         card1 = self.create_card(controls_box1)
         content.append(card1)
+
+        # Card 1.5: Theme selection
+        controls_theme = Gtk.ListBox()
+        controls_theme.add_css_class("boxed-list")
+        controls_theme.set_selection_mode(Gtk.SelectionMode.NONE)
+        controls_theme.append(self.create_theme_row())
+        card1_5 = self.create_card(controls_theme)
+        content.append(card1_5)
 
         # Card 2: Start on Lid Open
         controls_box2 = Gtk.ListBox()
@@ -1336,6 +1382,141 @@ class SamsungControl(Adw.Application):
             pass
         return "Unknown"
 
+    # ------------------------------------------------------------------
+    # theme handling helpers
+    def _get_auto_scheme(self):
+        """Return the best available "follow system" color scheme.
+
+        Different libadwaita versions expose different constants. If we don't
+        explicitly revert to a "follow system" scheme after FORCE_* modes, the
+        app can get stuck when the user switches back to "auto".
+        """
+        return (
+            getattr(Adw.ColorScheme, "PREFERRED", None)
+            or getattr(Adw.ColorScheme, "DEFAULT", None)
+        )
+
+    def _style_manager_is_dark(self):
+        try:
+            if hasattr(self.style_manager, "get_dark"):
+                return bool(self.style_manager.get_dark())
+            return bool(self.style_manager.get_property("dark"))
+        except Exception:
+            return None
+
+    def _set_scheme_css_class(self, scheme):
+        """Attach .sc-light/.sc-dark classes to the toplevel window."""
+        if not self.window:
+            return
+        for cls in ("sc-light", "sc-dark"):
+            try:
+                self.window.remove_css_class(cls)
+            except Exception:
+                pass
+        if scheme == "light":
+            self.window.add_css_class("sc-light")
+        elif scheme == "dark":
+            self.window.add_css_class("sc-dark")
+
+    def _sync_scheme_css_class(self):
+        choice = getattr(self, "_theme_choice", "auto") or "auto"
+        if choice == "light":
+            self._set_scheme_css_class("light")
+            return
+        if choice == "dark":
+            self._set_scheme_css_class("dark")
+            return
+
+        # auto: mirror the current effective scheme
+        is_dark = self._style_manager_is_dark()
+        if is_dark is True:
+            self._set_scheme_css_class("dark")
+        elif is_dark is False:
+            self._set_scheme_css_class("light")
+        else:
+            self._set_scheme_css_class(None)
+
+    def _on_style_manager_dark_changed(self, *_args):
+        # Only react in auto mode.
+        if getattr(self, "_theme_choice", "auto") == "auto":
+            self._sync_scheme_css_class()
+
+    def apply_theme(self, choice):
+        """Set the Adw.StyleManager color scheme based on a stored choice.
+
+        *choice* should be one of "light", "dark", or "auto".  Any other value
+        will revert to the system preference (if available).
+
+        We also reload the CSS provider after changing the scheme so that edits
+        to *theme.css* are picked up immediately.  This is especially useful
+        during development.
+        """
+        if choice == "light":
+            self.style_manager.set_color_scheme(Adw.ColorScheme.FORCE_LIGHT)
+        elif choice == "dark":
+            self.style_manager.set_color_scheme(Adw.ColorScheme.FORCE_DARK)
+        else:
+            scheme = self._get_auto_scheme()
+            if scheme is not None:
+                self.style_manager.set_color_scheme(scheme)
+            # If neither is available, we leave manager alone.
+
+        self._theme_choice = choice if choice in ("auto", "light", "dark") else "auto"
+        self._sync_scheme_css_class()
+
+        logging.debug(f"theme changed to {choice}, reloading CSS")
+        self.load_css()
+
+    def create_theme_row(self):
+        """Row for selecting application theme (light/dark/automatic)."""
+        row = Gtk.ListBoxRow()
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        box.add_css_class("control-box")
+        box.set_margin_top(6)
+        box.set_margin_bottom(6)
+        box.set_margin_start(12)
+        box.set_margin_end(12)
+
+        label_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        title_label = Gtk.Label(label=self.t("theme"), xalign=0)
+        title_label.add_css_class("heading")
+        subtitle_label = Gtk.Label(label=self.t("theme_desc"), xalign=0)
+        subtitle_label.add_css_class("subtitle")
+        label_box.append(title_label)
+        label_box.append(subtitle_label)
+
+        theme_options = [
+            ("auto", self.t("theme_auto")),
+            ("light", self.t("theme_light")),
+            ("dark", self.t("theme_dark")),
+        ]
+        dropdown = Gtk.DropDown.new_from_strings([label for _, label in theme_options])
+        # determine current selection from settings
+        settings = self.load_settings()
+        current = 0
+        if settings and "theme" in settings:
+            for idx, (code, _) in enumerate(theme_options):
+                if code == settings["theme"]:
+                    current = idx
+                    break
+        dropdown.set_selected(current)
+
+        def on_theme_changed(dropdown, _gparam):
+            idx = dropdown.get_selected()
+            if idx < 0 or idx >= len(theme_options):
+                return
+            choice = theme_options[idx][0]
+            self.apply_theme(choice)
+            settings = self.load_settings()
+            settings["theme"] = choice
+            self.save_settings(settings)
+
+        dropdown.connect("notify::selected", on_theme_changed)
+        box.append(label_box)
+        box.append(dropdown)
+        row.set_child(box)
+        return row
+
     def _get_firmware_version(self):
         """Get firmware version"""
         try:
@@ -1517,6 +1698,7 @@ class SamsungControl(Adw.Application):
     def on_activate(self, app):
         # Create main window (use Gtk.ApplicationWindow so window manager decorations work)
         window = Gtk.ApplicationWindow(application=app)
+        self.window = window
         window.set_title(self.t("window_title"))
         window.set_default_size(1200, 700)
 
@@ -1528,10 +1710,14 @@ class SamsungControl(Adw.Application):
 
         # Set dark theme preference
         style_manager = Adw.StyleManager.get_default()
-        style_manager.set_color_scheme(Adw.ColorScheme.FORCE_DARK)
+        # the saved theme (if any) will be applied shortly by load_and_apply_settings
+        scheme = self._get_auto_scheme()
+        if scheme is not None:
+            style_manager.set_color_scheme(scheme)
 
         # Load custom CSS
         self.load_css()
+        self._sync_scheme_css_class()
 
         # Main layout: sidebar + content
         main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
@@ -1549,6 +1735,7 @@ class SamsungControl(Adw.Application):
 
         # Create content area with stack
         self.content_stack = Gtk.Stack()
+        self.content_stack.add_css_class("content-stack")
         self.content_stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
         self.content_stack.set_hexpand(True)
         self.content_stack.set_vexpand(True)
@@ -1736,210 +1923,30 @@ class SamsungControl(Adw.Application):
         return []
 
     def load_css(self):
-        css_provider = Gtk.CssProvider()
-        css = """
-            /* Sidebar Styling */
-            .sidebar {
-                background: @view_bg_color;
-                border-right: 1px solid alpha(@view_bg_color, 0.3);
-            }
+        """Load or reload the stylesheet from theme.css.
 
-            .sidebar-title {
-                font-weight: bold;
-                font-size: 18px;
-                color: @accent_bg_color;
-            }
-
-            .sidebar-subtitle {
-                font-weight: bold;
-                font-size: 18px;
-                color: @accent_bg_color;
-                margin-top: -3px;
-            }
-
-            /* User Profile Header */
-            .user-avatar {
-                min-width: 48px;
-                min-height: 48px;
-                border-radius: 50%;
-                overflow: hidden; /* ensure contained image is clipped */
-                background: alpha(@accent_bg_color, 0.15);
-                color: @accent_bg_color;
-                font-weight: 600;
-                font-size: 18px;
-            }
-
-            .user-avatar-text {
-                font-weight: 600;
-                font-size: 18px;
-                color: @accent_bg_color;
-            }
-
-            /* ensure photos are clipped to a circle */
-            .user-avatar-image {
-                border-radius: 50%;
-                /* make sure the image fills its box and is not distorted */
-                min-width: 48px;
-                min-height: 48px;
-            }
-
-            .user-name {
-                font-weight: 600;
-                font-size: 15px;
-                color: @card_fg_color;
-            }
-
-            .user-status {
-                font-size: 12px;
-                color: alpha(@accent_bg_color, 1);
-            }
-
-            .sidebar-button {
-                background: transparent;
-                border: none;
-                border-radius: 8px;
-                margin: 8px 12px;
-                padding: 0;
-                transition: all 200ms ease;
-            }
-
-            .sidebar-button:hover {
-                background: alpha(@accent_bg_color, 0.1);
-            }
-
-            .sidebar-button:active {
-                background: alpha(@accent_bg_color, 0.2);
-            }
-
-            .sidebar-icon {
-                min-width: 60px;
-                min-height: 60px;
-                border-radius: 12px;
-                background: transparent;
-                color: white;
-                transition: transform 200ms ease;
-            }
-
-            /* Make the icon box square and place label beside it */
-            .sidebar-button .sidebar-icon {
-                min-width: 48px;
-                min-height: 48px;
-                border-radius: 10px;
-                margin-right: 12px;
-                background: transparent;
-            }
-
-            .sidebar-label {
-                font-weight: 600;
-                font-size: 16px;
-                color: @card_fg_color;
-            }
-
-            .sidebar-description {
-                font-weight: 400;
-                font-size: 12px;
-                color: alpha(@card_fg_color, 0.65);
-                margin-top: 2px;
-            }
-
-            .sidebar-button:hover .sidebar-icon {
-                transform: scale(1.05);
-            }
-
-            /* Page Content */
-            .page-content {
-                background: @view_bg_color;
-            }
-
-            .page-title {
-                font-size: 18px;
-                font-weight: bold;
-                color: @card_fg_color;
-                border-left: 10px solid @view_bg_color;
-                margin-bottom: 12px;
-            }
-
-            /* Card Styling */
-            .card {
-                background: alpha(@card_bg_color, 0.8);
-                border-radius: 12px;
-                padding: 0;
-                margin: 0;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            }
-
-            .card listbox {
-                background: transparent;
-            }
-
-            .card listbox row {
-                padding: 0;
-                margin: 0;
-            }
-
-            .heading {
-                font-weight: bold;
-                font-size: 16px;
-                margin-bottom: 4px;
-                color: @card_fg_color;
-            }
-
-            .subtitle {
-                font-size: 13px;
-                color: alpha(@card_fg_color, 0.7);
-            }
-
-            .value-label {
-                font-size: 28px;
-                font-weight: bold;
-                color: @accent_bg_color;
-            }
-
-            .samsung-switch switch {
-                background: alpha(@accent_bg_color, 0.1);
-                border: none;
-                min-width: 50px;
-                min-height: 26px;
-            }
-
-            .samsung-switch switch:checked {
-                background: @accent_bg_color;
-            }
-
-            .control-box {
-                background: transparent;
-                padding: 8px 12px;
-                margin: 0;
-            }
-
-            .boxed-list {
-                background: transparent;
-                margin: 0;
-                padding: 0;
-            }
-
-            .boxed-list row {
-                padding: 0;
-                margin: 0;
-                border-bottom: 1px solid alpha(@borders, 0.1);
-            }
-
-            .boxed-list row:last-child {
-                border-bottom: none;
-            }
-
-            .dashboard-title {
-                font-size: 20px;
-                font-weight: bold;
-                color: @accent_bg_color;
-            }
+        The provider is stored in *self.css_provider* so subsequent calls update
+        the same object rather than stacking multiple providers on the display.
         """
-        css_provider.load_from_data(css.encode())
-        Gtk.StyleContext.add_provider_for_display(
-            Gdk.Display.get_default(),
-            css_provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
-        )
+        import os
+
+        if not hasattr(self, "css_provider"):
+            self.css_provider = Gtk.CssProvider()
+            Gtk.StyleContext.add_provider_for_display(
+                Gdk.Display.get_default(),
+                self.css_provider,
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+            )
+
+        css_path = os.path.join(os.path.dirname(__file__), "theme.css")
+        try:
+            with open(css_path, "r") as f:
+                css = f.read()
+        except Exception as e:
+            logging.error(f"could not load theme.css: {e}")
+            css = ""
+        logging.debug(f"loading CSS from {css_path}\n{css[:200]}")
+        self.css_provider.load_from_data(css.encode())
 
     def create_card(self, child):
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -2248,15 +2255,30 @@ class SamsungControl(Adw.Application):
         return f"{minutes}m"
 
     # Settings persistence
-    def settings_path(self):
+    def settings_paths(self):
+        """Return (primary_path, canonical_path).
+
+        Primary path follows GLib/XDG so installs behave like a GNOME app.
+        Canonical path is always under ~/.local/share so settings survive when
+        launched from sandboxed environments that alter XDG_DATA_HOME.
+        """
         data_dir = GLib.get_user_data_dir()
-        p = os.path.join(data_dir, "samsung-control")
-        os.makedirs(p, exist_ok=True)
-        return os.path.join(p, "settings.json")
+        primary_dir = os.path.join(data_dir, "samsung-control")
+        canonical_dir = os.path.join(str(Path.home()), ".local", "share", "samsung-control")
+        os.makedirs(primary_dir, exist_ok=True)
+        os.makedirs(canonical_dir, exist_ok=True)
+        return (
+            os.path.join(primary_dir, "settings.json"),
+            os.path.join(canonical_dir, "settings.json"),
+        )
+
+    def settings_path(self):
+        return self.settings_paths()[0]
 
     def load_settings(self):
-        path = self.settings_path()
+        primary_path, canonical_path = self.settings_paths()
         try:
+            path = primary_path if os.path.exists(primary_path) else canonical_path
             if os.path.exists(path):
                 with open(path, "r") as f:
                     return json.load(f)
@@ -2265,11 +2287,17 @@ class SamsungControl(Adw.Application):
         return {}
 
     def save_settings(self, settings):
-        path = self.settings_path()
+        primary_path, canonical_path = self.settings_paths()
         try:
-            with open(path, "w") as f:
+            with open(primary_path, "w") as f:
                 json.dump(settings, f, indent=2)
-            logging.info(f"Settings saved to {path}")
+            if canonical_path != primary_path:
+                try:
+                    with open(canonical_path, "w") as f:
+                        json.dump(settings, f, indent=2)
+                except Exception:
+                    pass
+            logging.info(f"Settings saved to {primary_path}")
         except Exception as e:
             logging.error(f"Could not save settings: {e}")
 
@@ -2281,10 +2309,15 @@ class SamsungControl(Adw.Application):
         else:
             logging.info("No saved settings found, using defaults")
             
+        # apply theme early if present
+        theme_choice = settings.get("theme") if settings else None
+        if theme_choice:
+            self.apply_theme(theme_choice)
+
         applied_count = 0
         failed_count = 0
         for attr, value in settings.items():
-            if attr == "language":
+            if attr in ("language", "theme"):
                 continue
             if attr in ["start_on_lid_open", "allow_recording"]:
                 # Convert value to "1" or "0" string
@@ -2292,7 +2325,6 @@ class SamsungControl(Adw.Application):
                 
                 # Try to apply the setting
                 result = self.write_value(attr, str_value)
-                
                 if result is True:
                     logging.info(f"Successfully applied saved setting: {attr}={str_value}")
                     applied_count += 1

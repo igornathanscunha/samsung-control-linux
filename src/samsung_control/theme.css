@@ -1,0 +1,229 @@
+/* theme.css - shared styles for Samsung Control app
+
+   GTK/libadwaita CSS is not full web CSS. In particular it does not support
+   CSS custom properties (e.g. --foo) or var(--foo), and it doesn't implement
+   :root. Keeping this file GTK-compatible avoids noisy "Theme parser error"
+   warnings at runtime.
+*/
+
+/* Default rules follow the current Adwaita/libadwaita palette via @theme vars.
+   Scheme-specific overrides live under .sc-light below. */
+
+.sidebar {
+    background: @view_bg_color;
+    border-right: 1px solid alpha(@view_bg_color, 0.3);
+}
+
+.content-stack {
+    background: @view_bg_color;
+}
+
+.page-content {
+    background: @view_bg_color;
+}
+
+.page-content viewport {
+    background: @view_bg_color;
+}
+
+.battery-threshold-slider {
+    color: @accent_bg_color;
+}
+
+.sidebar-title {
+    font-weight: bold;
+    font-size: 18px;
+    color: @accent_bg_color;
+}
+
+.sidebar-subtitle {
+    font-weight: bold;
+    font-size: 18px;
+    color: @accent_bg_color;
+    margin-top: -3px;
+}
+
+.user-avatar {
+    min-width: 48px;
+    min-height: 48px;
+    border-radius: 50%;
+    background: alpha(@accent_bg_color, 0.15);
+    color: @accent_bg_color;
+    font-weight: 600;
+    font-size: 18px;
+}
+
+.user-avatar-text {
+    font-weight: 600;
+    font-size: 18px;
+    color: @accent_bg_color;
+}
+
+.user-avatar-image {
+    border-radius: 50%;
+    min-width: 48px;
+    min-height: 48px;
+}
+
+.user-name {
+    font-weight: 600;
+    font-size: 15px;
+    color: @card_fg_color;
+}
+
+.user-status {
+    font-size: 12px;
+    color: @accent_bg_color;
+}
+
+.sidebar-button {
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    margin: 8px 12px;
+    padding: 0;
+    transition: all 200ms ease;
+}
+
+.sidebar-button:hover { background: alpha(@accent_bg_color, 0.1); }
+.sidebar-button:active { background: alpha(@accent_bg_color, 0.2); }
+
+.sidebar-icon {
+    min-width: 60px;
+    min-height: 60px;
+    border-radius: 12px;
+    background: transparent;
+    color: white;
+    transition: transform 200ms ease;
+}
+
+.sidebar-button .sidebar-icon {
+    min-width: 48px;
+    min-height: 48px;
+    border-radius: 10px;
+    margin-right: 12px;
+    background: transparent;
+}
+
+.sidebar-label {
+    font-weight: 600;
+    font-size: 16px;
+    color: @card_fg_color;
+}
+
+.sidebar-description {
+    font-weight: 400;
+    font-size: 12px;
+    color: alpha(@card_fg_color, 0.65);
+    margin-top: 2px;
+}
+
+.sidebar-button:hover .sidebar-icon { transform: scale(1.05); }
+
+.page-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: @card_fg_color;
+    border-left: 10px solid @view_bg_color;
+    margin-bottom: 12px;
+}
+
+.heading {
+    font-weight: bold;
+    font-size: 16px;
+    margin-bottom: 4px;
+    color: @card_fg_color;
+}
+
+.subtitle {
+    font-size: 13px;
+    color: alpha(@card_fg_color, 0.7);
+}
+
+.value-label {
+    font-size: 28px;
+    font-weight: bold;
+    color: @accent_bg_color;
+}
+
+.samsung-switch switch {
+    background: alpha(@accent_bg_color, 0.1);
+    border: none;
+    min-width: 50px;
+    min-height: 26px;
+}
+
+.samsung-switch switch:checked { background: @accent_bg_color; }
+
+.control-box {
+    background: transparent;
+    padding: 8px 12px;
+    margin: 0;
+}
+
+.boxed-list {
+    background: transparent;
+    margin: 0;
+    padding: 0;
+}
+
+.boxed-list row {
+    padding: 0;
+    margin: 0;
+    border-bottom: 1px solid alpha(@borders, 0.1);
+}
+
+.boxed-list row:last-child { border-bottom: none; }
+
+.dashboard-title {
+    font-size: 20px;
+    font-weight: bold;
+    color: @accent_bg_color;
+}
+
+
+/* Light scheme overrides.
+   The app sets the .sc-light/.sc-dark CSS class on the toplevel window so we
+   don't depend on libadwaita-internal style classes. */
+.sc-light .sidebar {
+    background: #f3f0fa;
+    border-right: 1px solid #f3f0fa;
+}
+
+.sc-light .content-stack { background: #f3f0fa; }
+.sc-light .page-content { background: #f3f0fa; }
+.sc-light .page-content viewport { background: #f3f0fa; }
+.sc-light .battery-threshold-slider { color: @accent_bg_color; }
+
+.sc-light .sidebar-title { color: #5a4bcf; }
+.sc-light .sidebar-subtitle { color: #5a4bcf; }
+
+.sc-light .user-avatar {
+    background: alpha(#5a4bcf, 0.15);
+    color: #5a4bcf;
+}
+.sc-light .user-avatar-text { color: #5a4bcf; }
+.sc-light .user-name { color: #333333; }
+.sc-light .user-status { color: @accent_bg_color; }
+
+.sc-light .sidebar-button:hover { background: alpha(@accent_bg_color, 0.1); }
+.sc-light .sidebar-button:active { background: alpha(@accent_bg_color, 0.2); }
+
+.sc-light .sidebar-icon { color: #5a4bcf; }
+.sc-light .sidebar-label { color: #333333; }
+.sc-light .sidebar-description { color: alpha(#333333, 0.65); }
+
+.sc-light .page-title {
+    color: #333333;
+    border-left: 10px solid #f3f0fa;
+}
+
+.sc-light .heading { color: #333333; }
+.sc-light .subtitle { color: alpha(#333333, 0.7); }
+.sc-light .value-label { color: @accent_bg_color; }
+
+.sc-light .samsung-switch switch { background: alpha(#5a4bcf, 0.1); }
+.sc-light .samsung-switch switch:checked { background: #5a4bcf; }
+
+.sc-light .boxed-list row { border-bottom: 1px solid alpha(#cccccc, 0.3); }
+.sc-light .dashboard-title { color: #5a4bcf; }

@@ -3,7 +3,7 @@ import time
 from collections import deque
 
 import cairo
-from gi.repository import GLib, Gtk
+from gi.repository import GLib, Gtk, Gdk
 
 
 class FanSpeedGraph(Gtk.DrawingArea):
@@ -469,6 +469,16 @@ class BatteryThresholdSlider(Gtk.DrawingArea):
                     self.callback(self.current_value)
     
     def draw(self, area, cr, width, height, *args):
+        # Use CSS foreground color as the accent for the filled track and thumb.
+        # This lets theme.css control the slider highlight color.
+        accent = None
+        try:
+            accent = self.get_style_context().get_color()
+        except Exception:
+            accent = None
+        if not accent:
+            accent = Gdk.RGBA(red=0.2, green=0.4, blue=1.0, alpha=1.0)
+
         slider_y = height // 2
         slider_width = width - 40
         slider_x = 20
@@ -483,7 +493,7 @@ class BatteryThresholdSlider(Gtk.DrawingArea):
         # Draw filled track up to current value
         ratio = (self.current_value - self.min_value) / (self.max_value - self.min_value)
         filled_width = slider_width * ratio
-        cr.set_source_rgb(0.2, 0.4, 1.0)
+        cr.set_source_rgb(accent.red, accent.green, accent.blue)
         cr.set_line_width(4)
         cr.move_to(slider_x, slider_y)
         cr.line_to(slider_x + filled_width, slider_y)
@@ -511,12 +521,12 @@ class BatteryThresholdSlider(Gtk.DrawingArea):
         # Draw thumb/handle
         thumb_x = slider_x + filled_width
         thumb_radius = 8
-        cr.set_source_rgb(0.2, 0.4, 1.0)
+        cr.set_source_rgb(accent.red, accent.green, accent.blue)
         cr.arc(thumb_x, slider_y, thumb_radius, 0, 2 * math.pi)
         cr.fill()
         
         # Draw thumb border
-        cr.set_source_rgba(0.2, 0.4, 1.0, 0.3)
+        cr.set_source_rgba(accent.red, accent.green, accent.blue, 0.3)
         cr.set_line_width(2)
         cr.arc(thumb_x, slider_y, thumb_radius + 4, 0, 2 * math.pi)
         cr.stroke()
@@ -527,12 +537,12 @@ class BatteryThresholdSlider(Gtk.DrawingArea):
             tooltip_y = slider_y - 30
             
             # Tooltip box
-            cr.set_source_rgba(0.2, 0.4, 1.0, 0.9)
+            cr.set_source_rgba(accent.red, accent.green, accent.blue, 0.9)
             cr.rectangle(tooltip_x - 20, tooltip_y - 15, 40, 20)
             cr.fill()
             
             # Tooltip border
-            cr.set_source_rgb(0.2, 0.4, 1.0)
+            cr.set_source_rgb(accent.red, accent.green, accent.blue)
             cr.set_line_width(1)
             cr.rectangle(tooltip_x - 20, tooltip_y - 15, 40, 20)
             cr.stroke()

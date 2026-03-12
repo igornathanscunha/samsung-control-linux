@@ -57,18 +57,18 @@ install_deps() {
 
     case "${ID_LIKE:-$ID}" in
         *arch*|*manjaro*)
-            pacman -S --needed python-gobject gtk4 libadwaita python-cairo polkit dbus xorg-xhost
+            pacman -S --needed python-gobject gtk4 libadwaita python-cairo polkit dbus xorg-xhost pciutils gnome-shell || true
             ;;
         *debian*|*ubuntu*|*linuxmint*|*pop*)
             apt-get update
             apt-get install -y python3-gi python3-gi-cairo gir1.2-gtk-4.0 libadwaita-1-0 \
-                gobject-introspection python3-cairo polkitd dbus x11-xserver-utils
+                gobject-introspection python3-cairo polkitd dbus x11-xserver-utils pciutils gnome-shell || true
             ;;
         *fedora*|*rhel*|*centos*)
-            dnf install -y python3-gobject gtk4 libadwaita python3-cairo polkit dbus xorg-x11-server-utils
+            dnf install -y python3-gobject gtk4 libadwaita python3-cairo polkit dbus xorg-x11-server-utils pciutils gnome-shell || true
             ;;
         *)
-            echo "Unsupported distribution. Please install GTK4, libadwaita, Python GI, Cairo, polkit, dbus, and xhost manually."
+            echo "Unsupported distribution. Please install GTK4, libadwaita, Python GI, Cairo, polkit, dbus, xhost, and pciutils manually."
             ;;
     esac
 }
@@ -112,6 +112,11 @@ if [ "$1" = "uninstall" ]; then
     rm -f /usr/share/icons/hicolor/scalable/apps/samsung-battery.svg
     rm -f /usr/share/icons/hicolor/scalable/apps/samsung-settings.svg
     rm -f /usr/share/icons/hicolor/scalable/apps/samsung-graph.svg
+    # PNG icons
+    rm -f /usr/share/icons/hicolor/48x48/apps/samsung-battery.png
+    rm -f /usr/share/icons/hicolor/48x48/apps/samsung-settings.png
+    rm -f /usr/share/icons/hicolor/48x48/apps/samsung-graph.png
+    rm -f /usr/share/icons/hicolor/48x48/apps/samsung-about.png
     gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
 
     # Remove installer user from 'samsung' group if present
@@ -186,10 +191,16 @@ cp -r "$SCRIPT_DIR/src/samsung_control/"* /usr/local/bin/samsung_control/
 
 # Install icons (now stored under assets/ at repository root)
 ICON_DIR="$SCRIPT_DIR/assets/icons"
+# SVG variants for high‑resolution or theming
 install -Dm644 "$ICON_DIR/samsung-control.svg" /usr/share/icons/hicolor/scalable/apps/samsung-control.svg
 install -Dm644 "$ICON_DIR/battery.svg" /usr/share/icons/hicolor/scalable/apps/samsung-battery.svg
 install -Dm644 "$ICON_DIR/settings.svg" /usr/share/icons/hicolor/scalable/apps/samsung-settings.svg
 install -Dm644 "$ICON_DIR/graph.svg" /usr/share/icons/hicolor/scalable/apps/samsung-graph.svg
+# PNG versions used by the sidebar buttons (48×48)
+install -Dm644 "$ICON_DIR/charging.png" /usr/share/icons/hicolor/48x48/apps/samsung-battery.png
+install -Dm644 "$ICON_DIR/creative.png" /usr/share/icons/hicolor/48x48/apps/samsung-settings.png
+install -Dm644 "$ICON_DIR/graphic.png" /usr/share/icons/hicolor/48x48/apps/samsung-graph.png
+install -Dm644 "$ICON_DIR/information.png" /usr/share/icons/hicolor/48x48/apps/samsung-about.png
 
 # Copy desktop entry with updated icon name
 cat > /usr/share/applications/org.samsung.control.desktop << EOL
