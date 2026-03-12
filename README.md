@@ -75,6 +75,8 @@ work offline.
   - Performance mode selection
 - Appearance control
   - Light / Dark / Automatic theme, selectable under Advanced Features
+- Language control
+  - English / Portuguese (Brazil), selectable under Advanced Features
 ## Performance Profiles Analysis (Geekbench 6)
 
 | Mode | Single-Core | Multi-Core | Notes |
@@ -133,6 +135,16 @@ Notes:
   relevant sysfs/device nodes without elevating the whole UI.
 - If you just installed it, log out and back in so the new group membership
   takes effect.
+
+## UI Settings (Theme and Language)
+
+The application includes a few UI-level settings that do not depend on the
+kernel driver:
+
+- Theme: go to **Advanced Features** and choose **Automatic**, **Light**, or
+  **Dark**.
+- Language: go to **Advanced Features** and switch between **English** and
+  **Portuguese (Brazil)**.
 
 ### Uninstalling
 
