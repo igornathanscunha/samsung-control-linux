@@ -365,6 +365,7 @@ class SamsungControl(Adw.Application):
 
         subtitle_label = Gtk.Label(label=subtitle, xalign=0)
         subtitle_label.add_css_class("subtitle")
+        subtitle_label.set_margin_top(12)
 
         scale = Gtk.Scale.new_with_range(
             Gtk.Orientation.HORIZONTAL, min_val, max_val, 1
@@ -406,6 +407,7 @@ class SamsungControl(Adw.Application):
                 label=f"{subtitle} ({self.t('not_available')})", xalign=0
             )
             subtitle_label.add_css_class("subtitle")
+            subtitle_label.set_margin_top(12)
 
             label_box.append(title_label)
             label_box.append(subtitle_label)
@@ -429,6 +431,7 @@ class SamsungControl(Adw.Application):
         title_label.add_css_class("heading")
         subtitle_label = Gtk.Label(label=subtitle, xalign=0)
         subtitle_label.add_css_class("subtitle")
+        subtitle_label.set_margin_top(12)
 
         label_box.append(title_label)
         label_box.append(subtitle_label)
@@ -498,6 +501,7 @@ class SamsungControl(Adw.Application):
         title_label.add_css_class("heading")
         subtitle_label = Gtk.Label(label=self.t("protect_battery_desc"), xalign=0)
         subtitle_label.add_css_class("subtitle")
+        subtitle_label.set_margin_top(12)
         subtitle_label.set_margin_bottom(6)
         label_box.append(title_label)
         label_box.append(subtitle_label)
@@ -556,6 +560,7 @@ class SamsungControl(Adw.Application):
         title_label.add_css_class("heading")
         subtitle_label = Gtk.Label(label=self.t("language_desc"), xalign=0)
         subtitle_label.add_css_class("subtitle")
+        subtitle_label.set_margin_top(12)
 
         label_box.append(title_label)
         label_box.append(subtitle_label)
@@ -603,6 +608,7 @@ class SamsungControl(Adw.Application):
             title_label.add_css_class("heading")
             subtitle_label = Gtk.Label(label=self.t("battery_threshold_desc"), xalign=0)
             subtitle_label.add_css_class("subtitle")
+            subtitle_label.set_margin_top(12)
 
             header_box.append(title_label)
             header_box.append(subtitle_label)
@@ -1742,6 +1748,7 @@ class SamsungControl(Adw.Application):
         title_label.add_css_class("heading")
         subtitle_label = Gtk.Label(label=self.t("theme_desc"), xalign=0)
         subtitle_label.add_css_class("subtitle")
+        subtitle_label.set_margin_top(12)
         label_box.append(title_label)
         label_box.append(subtitle_label)
 
