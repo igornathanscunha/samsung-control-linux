@@ -1,39 +1,63 @@
 # Samsung Galaxy Book Control for Linux
 
+> ⚠️ **Fork notice:** this repository is a fork of
+> [EvickaStudio/samsung-control-linux](https://github.com/EvickaStudio/samsung-control-linux).
+>
 > [!IMPORTANT]
-> This application is currently in development and has been tested on EndeavourOS with a Samsung Galaxy Book 2 Pro 360 15.
+> This application is currently in development and has been tested on **Ubuntu 24.04.4** running a
+> **Samsung Galaxy Book 4 i3**.  The software requires **Linux kernel 6.15 or newer**; earlier kernels do
+> not ship the Samsung platform driver and may need the third‑party
+> `samsung-galaxybook-extras` module (see below).
+>
+A system settings application for Samsung Galaxy Book laptops running Linux,
+providing similar functionality to Samsung Settings on Windows. The
+application offers a modern GTK4 interface to control various laptop
+features and hardware settings.
 
-A system settings application for Samsung Galaxy Book laptops running Linux, providing similar functionality to Samsung Settings on Windows. The application offers a modern GTK4 interface to control various laptop features and hardware settings (currently only tested on Arch-based distributions).
+## Kernel support and dependencies
 
-## Important Note About Dependencies
+The UI communicates with the Samsung platform driver exposed by the kernel at
+`/dev/samsung-galaxybook`.  That driver is included in **mainline Linux as of
+6.15**; if you are running an older kernel you will need the
+[`samsung-galaxybook-extras`](https://github.com/joshuagrisham/samsung-galaxybook-extras)
+module.  The extra module is considered a stop‑gap and is unnecessary on
+kernels ≥ 6.15.
 
-This application relies on the [samsung-galaxybook-extras](https://github.com/joshuagrisham/samsung-galaxybook-extras) kernel module, which is currently in development (WIP). The kernel module replicates functionality that Samsung provides in Windows through their System Event Controller and System Support Engine, including:
+When present, the kernel driver provides the following features:
 
-- ACPI driver interaction with Samsung's SCAI ACPI device
-- Hardware control features (keyboard backlight, battery threshold, etc.)
-- Performance mode management
-- System event handling
+- ACPI interaction with Samsung's SCAI device
+- Keyboard backlight control
+- Battery threshold and USB charge switching
+- Performance profile management
+- Camera/microphone block/allow
 
-While the kernel module is nearing readiness for mainline inclusion, please note that it's still considered a work in progress. Use the features at your own discretion.
+Use the features at your own discretion.  On modern kernels the driver is
+built‑in and maintained upstream; on older kernels you are relying on the
+third‑party extras release.
 
 ## Features
 
-![Screenshot](assets/screenshot-2.png)
+Below are a few screenshots demonstrating the interface.  The images are
+located in `assets/screenshots/` and are shipped with the repository so they
+work offline.
 
-- Modern GTK4/libadwaita interface
+![Main page](assets/screenshots/screenshot-1.png)
+![Advanced options](assets/screenshots/screenshot-2.png)
+![System monitor](assets/screenshots/screenshot-3.png)
+
+- Modern GTK4/libadwaita UI
 - Real-time system monitoring
-  - [x] Fan speed with RPM history graph
-  - [x] CPU usage tracking (not dependent on kernel module)
-  - [x] Battery status and charging (not dependent on kernel module)
-- Hardware Controls
-  - [x] Keyboard backlight brightness
-  - [x] Battery charge threshold
-  - [ ] USB charging when laptop is off
-  - [x] Lid open power control
-  - [x] Camera/microphone access (Blocks/Allows usage)
-  - [x] Performance mode selection
+  - Fan speed with RPM history graph
+  - CPU usage tracking (kernel‑independent)
+  - Battery status and charge/discharge info (kernel‑independent)
+- Hardware controls
+  - Keyboard backlight brightness
+  - Battery charge threshold
+  - Lid‑open power on/off
+  - Camera/mic access block/allow
+  - Performance mode selection
 
-## Performance Profiles Analysis (Geekbench 6)
+## Performance Profiles Analysis (Geekbench 6)
 
 | Mode | Single-Core | Multi-Core | Notes |
 |------|-------------|------------|--------|
@@ -52,9 +76,9 @@ While the kernel module is nearing readiness for mainline inclusion, please note
 
 ## System Requirements
 
-- Linux kernel 6.0 or newer
-- Python 3.x with GTK 4 and libadwaita
-- Samsung Galaxy Book kernel module (installed via the provided installer)
+- **Kernel 6.15 or newer** (required for built‑in Samsung driver)
+- Python 3.x with GTK 4 and libadwaita
+- Optional: `samsung-galaxybook-extras` module if running an older kernel
 
 ## Installation
 
@@ -71,24 +95,29 @@ git submodule update --init
 
 ### 2. Install Components
 
-Before installing the GUI, make sure the `samsung-galaxybook` kernel module is present on your system. You can build it from the
-[samsung-galaxybook-extras](https://github.com/joshuagrisham/samsung-galaxybook-extras) repository or install a prebuilt package from your
-distribution.
+Before installing the GUI, make sure the `samsung-galaxybook` kernel driver is
+available.  On kernels newer than 6.15 it is included; otherwise build/install
+it from the `samsung-galaxybook-extras` repository.
 
-To install the application itself, simply run the installer script located at the project root:
+To install the application itself:
 
 ```bash
 sudo ./install.sh
 ```
 
-After installation, you'll find "Samsung Galaxy Book Control" in your applications menu.
+After installation, you will find “Samsung Galaxy Book Control” in your
+applications menu.
 
 ## Additional Resources
 
 For more information about Samsung Galaxy Book Linux compatibility:
 
-- [samsung-galaxybook-extras](https://github.com/joshuagrisham/samsung-galaxybook-extras)
-- [galaxy-book2-pro-linux](https://github.com/joshuagrisham/galaxy-book2-pro-linux) (audio support)
+- [samsung-galaxybook-extras](https://github.com/joshuagrisham/samsung-galaxybook-extras) –
+  third‑party driver for kernels < 6.15
+- [galaxy-book2-pro-linux](https://github.com/joshuagrisham/galaxy-book2-pro-linux) –
+  audio support
+
+> 💡 This code and the README text were produced with the help of AI prompts.
 
 ## License
 
