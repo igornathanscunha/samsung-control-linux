@@ -61,8 +61,6 @@ located in `assets/screenshots/` and are shipped with the repository so they
 work offline.
 
 ![Main page](assets/screenshots/screenshot-1.png)
-![Advanced options](assets/screenshots/screenshot-2.png)
-![System monitor](assets/screenshots/screenshot-3.png)
 
 - Modern GTK4/libadwaita UI
 - Real-time system monitoring
