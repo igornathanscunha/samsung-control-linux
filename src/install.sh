@@ -109,9 +109,6 @@ if [ "$1" = "uninstall" ]; then
     # Remove desktop entry and icons
     rm -f /usr/share/applications/org.samsung.control.desktop
     rm -f /usr/share/icons/hicolor/scalable/apps/samsung-control.svg
-    rm -f /usr/share/icons/hicolor/scalable/apps/samsung-battery.svg
-    rm -f /usr/share/icons/hicolor/scalable/apps/samsung-settings.svg
-    rm -f /usr/share/icons/hicolor/scalable/apps/samsung-graph.svg
     gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
 
     # Remove installer user from 'samsung' group if present

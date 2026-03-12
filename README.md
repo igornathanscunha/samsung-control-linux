@@ -108,6 +108,20 @@ sudo ./install.sh
 After installation, you will find “Samsung Galaxy Book Control” in your
 applications menu.
 
+### Uninstalling
+
+To remove the application and all its components:
+
+```bash
+sudo ./install.sh uninstall
+```
+
+For more options, including help:
+
+```bash
+sudo ./install.sh --help
+```
+
 ## Additional Resources
 
 For more information about Samsung Galaxy Book Linux compatibility:

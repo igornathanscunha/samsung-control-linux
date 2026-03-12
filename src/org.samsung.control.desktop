@@ -2,8 +2,9 @@
 Name=Samsung Galaxy Book Control
 Comment=Control Samsung Galaxy Book features
 Exec=samsung-control-wrapper
-Icon=samsung-laptop
+Icon=samsung-control
 Terminal=false
+StartupWMClass=org.samsung.control
 Type=Application
 Categories=Settings;HardwareSettings;
-Keywords=samsung;galaxybook;laptop;control; 
+Keywords=samsung;galaxybook;laptop;control;
