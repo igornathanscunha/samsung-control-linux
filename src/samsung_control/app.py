@@ -105,6 +105,11 @@ class SamsungControl(Adw.Application):
         self.cpu_usage_label = None
         self.cpu_core_list_box = None
         self.cpu_core_widgets = []
+        self._battery_threshold_slider = None
+
+        # Settings keys (do not treat these as sysfs attrs)
+        self._KEY_PROTECT_BATTERY_ENABLED = "protect_battery_enabled"
+        self._KEY_PROTECT_BATTERY_THRESHOLD = "protect_battery_threshold"
 
     def t(self, key):
         lang = self.language if self.language in TRANSLATIONS else "en"
@@ -126,6 +131,81 @@ class SamsungControl(Adw.Application):
             return f"{self.base_path}/{attr}"
         else:
             return f"{self.base_path}/{attr}"
+
+    def _get_saved_protect_battery(self, settings=None):
+        settings = settings if isinstance(settings, dict) else self.load_settings()
+        enabled = settings.get(self._KEY_PROTECT_BATTERY_ENABLED)
+        if enabled is None:
+            # Default: enabled if kernel has a non-zero threshold, else enabled.
+            cur = self.read_value("charge_control_end_threshold")
+            try:
+                return (int(cur or "80") > 0, int(cur or "80"))
+            except Exception:
+                return (True, 80)
+        threshold = settings.get(self._KEY_PROTECT_BATTERY_THRESHOLD, 80)
+        try:
+            threshold = int(threshold)
+        except Exception:
+            threshold = 80
+        return (bool(enabled), max(0, min(100, threshold)))
+
+    def _apply_battery_threshold(self, value_int):
+        value_int = int(value_int)
+        value_int = max(0, min(100, value_int))
+        # Some kernels reject 0 for charge_control_end_threshold (EINVAL). In that
+        # case, treat "disabled" as 100 (no practical limit).
+        res = self.write_value("charge_control_end_threshold", str(value_int))
+        if value_int == 0 and res == "invalid_argument":
+            return self.write_value("charge_control_end_threshold", "100")
+        return res
+
+    def set_protect_battery_enabled(self, enabled):
+        """Enable/disable the battery threshold feature and persist the choice."""
+        settings = self.load_settings()
+        cur_enabled, cur_threshold = self._get_saved_protect_battery(settings)
+
+        enabled = bool(enabled)
+
+        # Read the current kernel threshold to capture an up-to-date value.
+        kernel_threshold = None
+        cur = self.read_value("charge_control_end_threshold")
+        if cur is not None:
+            try:
+                kernel_threshold = int(cur)
+            except Exception:
+                kernel_threshold = None
+
+        if not enabled:
+            # Save last non-zero threshold for later restore.
+            if kernel_threshold and kernel_threshold > 0:
+                settings[self._KEY_PROTECT_BATTERY_THRESHOLD] = int(kernel_threshold)
+                cur_threshold = int(kernel_threshold)
+            settings[self._KEY_PROTECT_BATTERY_ENABLED] = False
+            self.save_settings(settings)
+            result = self._apply_battery_threshold(0)
+        else:
+            # Restore last saved threshold (or current kernel if already set).
+            restore = settings.get(self._KEY_PROTECT_BATTERY_THRESHOLD, cur_threshold or 80)
+            try:
+                restore = int(restore)
+            except Exception:
+                restore = 80
+            restore = max(1, min(100, restore))
+            settings[self._KEY_PROTECT_BATTERY_ENABLED] = True
+            settings[self._KEY_PROTECT_BATTERY_THRESHOLD] = restore
+            self.save_settings(settings)
+            result = self._apply_battery_threshold(restore)
+
+        # Update slider UI if it exists.
+        if self._battery_threshold_slider is not None:
+            _, saved_threshold = self._get_saved_protect_battery(settings)
+            self._battery_threshold_slider.set_sensitive(bool(enabled))
+            if enabled:
+                try:
+                    self._battery_threshold_slider.set_value(int(saved_threshold))
+                except Exception:
+                    pass
+        return result
 
     def attribute_exists(self, attr):
         """Check if an attribute path exists in the system"""
@@ -192,6 +272,12 @@ class SamsungControl(Adw.Application):
                 f"Permission denied when writing to {attr}. Ensure your user is in the 'samsung' group and re-login (udev rules from install.sh)."
             )
             return "permission_denied"
+        except OSError as e:
+            if getattr(e, "errno", None) == 22:
+                logging.error(f"Invalid argument writing {attr}={value} to {path}: {e}")
+                return "invalid_argument"
+            logging.error(f"OS error writing to {attr}: {e}")
+            return False
         except Exception as e:
             logging.error(f"Error writing to {attr}: {str(e)}")
             return False
@@ -379,6 +465,51 @@ class SamsungControl(Adw.Application):
         row.set_child(box)
         return row
 
+    def create_protect_battery_switch_row(self):
+        """A switch that enables/disables applying Battery Threshold to sysfs."""
+        row = Gtk.ListBoxRow()
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        box.add_css_class("control-box")
+        box.set_margin_top(6)
+        box.set_margin_bottom(6)
+        box.set_margin_start(12)
+        box.set_margin_end(12)
+
+        label_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        title_label = Gtk.Label(label=self.t("protect_battery"), xalign=0)
+        title_label.add_css_class("heading")
+        subtitle_label = Gtk.Label(label=self.t("protect_battery_desc"), xalign=0)
+        subtitle_label.add_css_class("subtitle")
+        label_box.append(title_label)
+        label_box.append(subtitle_label)
+
+        status_label = Gtk.Label(label="", xalign=0)
+        status_label.add_css_class("subtitle")
+        status_label.set_visible(False)
+
+        switch = Gtk.Switch()
+        switch.set_valign(Gtk.Align.CENTER)
+        switch.add_css_class("samsung-switch")
+
+        enabled, _th = self._get_saved_protect_battery()
+        switch.set_active(bool(enabled))
+
+        def _on_active_changed(_sw, _pspec=None):
+            result = self.set_protect_battery_enabled(bool(switch.get_active()))
+            if result == "permission_denied":
+                status_label.set_text(self.t("saved_not_applied"))
+                status_label.set_visible(True)
+            else:
+                status_label.set_visible(False)
+
+        switch.connect("notify::active", _on_active_changed)
+
+        box.append(label_box)
+        box.append(switch)
+        box.append(status_label)
+        row.set_child(box)
+        return row
+
     def create_language_row(self):
         row = Gtk.ListBoxRow()
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
@@ -423,7 +554,7 @@ class SamsungControl(Adw.Application):
         row.set_child(box)
         return row
 
-    def create_battery_threshold_row(self):
+    def create_battery_threshold_row(self, include_header=True):
         """Create Battery Threshold row with custom slider"""
         row = Gtk.ListBoxRow()
         row.set_selectable(False)
@@ -434,41 +565,107 @@ class SamsungControl(Adw.Application):
         box.set_margin_start(12)
         box.set_margin_end(12)
 
-        # Title and subtitle
-        header_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        title_label = Gtk.Label(label=self.t("battery_threshold"), xalign=0)
-        title_label.add_css_class("heading")
-        subtitle_label = Gtk.Label(label=self.t("battery_threshold_desc"), xalign=0)
-        subtitle_label.add_css_class("subtitle")
-        
-        header_box.append(title_label)
-        header_box.append(subtitle_label)
-        box.append(header_box)
+        if include_header:
+            header_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            title_label = Gtk.Label(label=self.t("battery_threshold"), xalign=0)
+            title_label.add_css_class("heading")
+            subtitle_label = Gtk.Label(label=self.t("battery_threshold_desc"), xalign=0)
+            subtitle_label.add_css_class("subtitle")
+
+            header_box.append(title_label)
+            header_box.append(subtitle_label)
+            box.append(header_box)
 
         # Slider
         slider = BatteryThresholdSlider()
         slider.add_css_class("battery-threshold-slider")
+        self._battery_threshold_slider = slider
+
+        settings = self.load_settings()
+        protect_enabled, saved_threshold = self._get_saved_protect_battery(settings)
+        slider.set_sensitive(bool(protect_enabled))
         
         # Read current value
         current_value = self.read_value("charge_control_end_threshold")
         if current_value:
             try:
-                slider.set_value(int(current_value))
+                cur_int = int(current_value)
+                if cur_int <= 0 and saved_threshold:
+                    slider.set_value(int(saved_threshold))
+                else:
+                    slider.set_value(cur_int)
             except Exception as e:
                 logging.warning(f"Could not set initial battery threshold: {e}")
-                slider.set_value(80)
+                slider.set_value(int(saved_threshold or 80))
         else:
-            slider.set_value(80)
+            slider.set_value(int(saved_threshold or 80))
 
         # Connect value change
         def on_threshold_changed(new_value):
-            self.write_value("charge_control_end_threshold", str(new_value))
-            logging.info(f"Battery threshold changed to: {new_value}")
+            # Always persist the last chosen threshold. Only apply when enabled.
+            try:
+                new_int = int(new_value)
+            except Exception:
+                new_int = 80
+            settings = self.load_settings()
+            settings[self._KEY_PROTECT_BATTERY_THRESHOLD] = int(new_int)
+            self.save_settings(settings)
+            if self._get_saved_protect_battery(settings)[0]:
+                self.write_value("charge_control_end_threshold", str(int(new_int)))
+                logging.info(f"Battery threshold changed to: {new_int}")
 
         slider.connect_value_changed(on_threshold_changed)
         box.append(slider)
 
         row.set_child(box)
+        return row
+
+    def create_protect_battery_row(self):
+        """Toggle that enables/disables applying the Battery Threshold to sysfs."""
+        row = Gtk.ListBoxRow()
+
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        outer.add_css_class("control-box")
+        outer.set_margin_top(6)
+        outer.set_margin_bottom(6)
+        outer.set_margin_start(12)
+        outer.set_margin_end(12)
+
+        top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        state_label = Gtk.Label(label=self.t("off"), xalign=0)
+        state_label.add_css_class("heading")
+        state_label.set_hexpand(True)
+
+        status_label = Gtk.Label(label="", xalign=0)
+        status_label.add_css_class("subtitle")
+        status_label.set_visible(False)
+
+        settings = self.load_settings()
+        enabled, _threshold = self._get_saved_protect_battery(settings)
+
+        switch = Gtk.Switch()
+        switch.set_valign(Gtk.Align.CENTER)
+        switch.add_css_class("samsung-switch")
+        switch.set_active(bool(enabled))
+        state_label.set_text(self.t("on") if switch.get_active() else self.t("off"))
+
+        def _on_active_changed(_sw, _pspec=None):
+            active = bool(switch.get_active())
+            state_label.set_text(self.t("on") if active else self.t("off"))
+            result = self.set_protect_battery_enabled(active)
+            if result == "permission_denied":
+                status_label.set_text(self.t("saved_not_applied"))
+                status_label.set_visible(True)
+            else:
+                status_label.set_visible(False)
+
+        switch.connect("notify::active", _on_active_changed)
+
+        top.append(state_label)
+        top.append(switch)
+        outer.append(top)
+        outer.append(status_label)
+        row.set_child(outer)
         return row
 
     def create_spinbutton_row(self, title, subtitle, attr, min_val, max_val):
@@ -904,6 +1101,15 @@ class SamsungControl(Adw.Application):
         page_title.add_css_class("page-title")
         page_title.set_xalign(0)
         content.append(page_title)
+
+        # Card 0: Protect Battery (enable/disable Battery Threshold)
+        protect_box = Gtk.ListBox()
+        protect_box.add_css_class("boxed-list")
+        protect_box.set_selection_mode(Gtk.SelectionMode.NONE)
+        protect_box.append(self.create_protect_battery_switch_row())
+
+        protect_card = self.create_card(protect_box)
+        content.append(protect_card)
 
         # Battery controls - Card 1: Battery Threshold
         controls_box1 = Gtk.ListBox()
@@ -2334,10 +2540,25 @@ class SamsungControl(Adw.Application):
         if theme_choice:
             self.apply_theme(theme_choice)
 
+        # Apply Protect Battery / Battery Threshold behavior first.
+        try:
+            enabled, threshold = self._get_saved_protect_battery(settings)
+            if enabled:
+                self._apply_battery_threshold(threshold)
+            else:
+                self._apply_battery_threshold(0)
+        except Exception as e:
+            logging.debug(f"Could not apply protect battery settings: {e}")
+
         applied_count = 0
         failed_count = 0
         for attr, value in settings.items():
-            if attr in ("language", "theme"):
+            if attr in (
+                "language",
+                "theme",
+                self._KEY_PROTECT_BATTERY_ENABLED,
+                self._KEY_PROTECT_BATTERY_THRESHOLD,
+            ):
                 continue
             if attr in ["start_on_lid_open", "allow_recording"]:
                 # Convert value to "1" or "0" string
