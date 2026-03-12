@@ -392,7 +392,7 @@ class SamsungControl(Adw.Application):
             logging.warning(f"Skipping switch for {attr} - attribute not found in system")
             # Create a disabled row showing the feature is unavailable
             row = Gtk.ListBoxRow()
-            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
             box.add_css_class("control-box")
             box.set_margin_top(6)
             box.set_margin_bottom(6)
@@ -417,7 +417,7 @@ class SamsungControl(Adw.Application):
             return row
 
         row = Gtk.ListBoxRow()
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         box.add_css_class("control-box")
         box.set_margin_top(6)
         box.set_margin_bottom(6)
@@ -432,14 +432,23 @@ class SamsungControl(Adw.Application):
 
         label_box.append(title_label)
         label_box.append(subtitle_label)
+        #label_box.set_margin_bottom(4)
 
         status_label = Gtk.Label(label="", xalign=0)
         status_label.add_css_class("subtitle")
         status_label.set_visible(False)
 
+        switch_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        switch_row.set_halign(Gtk.Align.START)
+        switch_row.set_margin_top(15)
+
         switch = Gtk.Switch()
         switch.set_valign(Gtk.Align.CENTER)
         switch.add_css_class("samsung-switch")
+
+        state_label = Gtk.Label(label=self.t("off"))
+        state_label.add_css_class("switch-state")
+        state_label.set_valign(Gtk.Align.CENTER)
 
         settings = self.load_settings()
         has_saved = isinstance(settings.get(attr), bool)
@@ -457,10 +466,19 @@ class SamsungControl(Adw.Application):
 
         self._switch_status_labels[attr] = status_label
 
+        # Initialize / keep state label in sync.
+        state_label.set_text(self.t("on") if switch.get_active() else self.t("off"))
+
+        def _sync_state_label(_sw, _pspec=None):
+            state_label.set_text(self.t("on") if switch.get_active() else self.t("off"))
+
+        switch.connect("notify::active", _sync_state_label)
         switch.connect("notify::active", self.on_switch_activated, attr)
 
         box.append(label_box)
-        box.append(switch)
+        switch_row.append(switch)
+        switch_row.append(state_label)
+        box.append(switch_row)
         box.append(status_label)
         row.set_child(box)
         return row
@@ -468,7 +486,7 @@ class SamsungControl(Adw.Application):
     def create_protect_battery_switch_row(self):
         """A switch that enables/disables applying Battery Threshold to sysfs."""
         row = Gtk.ListBoxRow()
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         box.add_css_class("control-box")
         box.set_margin_top(6)
         box.set_margin_bottom(6)
@@ -480,21 +498,33 @@ class SamsungControl(Adw.Application):
         title_label.add_css_class("heading")
         subtitle_label = Gtk.Label(label=self.t("protect_battery_desc"), xalign=0)
         subtitle_label.add_css_class("subtitle")
+        subtitle_label.set_margin_bottom(6)
         label_box.append(title_label)
         label_box.append(subtitle_label)
+        label_box.set_margin_bottom(4)
 
         status_label = Gtk.Label(label="", xalign=0)
         status_label.add_css_class("subtitle")
         status_label.set_visible(False)
 
+        switch_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        switch_row.set_halign(Gtk.Align.START)
+        switch_row.set_margin_top(0)
+
         switch = Gtk.Switch()
         switch.set_valign(Gtk.Align.CENTER)
         switch.add_css_class("samsung-switch")
 
+        state_label = Gtk.Label(label=self.t("off"))
+        state_label.add_css_class("switch-state")
+        state_label.set_valign(Gtk.Align.CENTER)
+
         enabled, _th = self._get_saved_protect_battery()
         switch.set_active(bool(enabled))
+        state_label.set_text(self.t("on") if switch.get_active() else self.t("off"))
 
         def _on_active_changed(_sw, _pspec=None):
+            state_label.set_text(self.t("on") if switch.get_active() else self.t("off"))
             result = self.set_protect_battery_enabled(bool(switch.get_active()))
             if result == "permission_denied":
                 status_label.set_text(self.t("saved_not_applied"))
@@ -505,7 +535,9 @@ class SamsungControl(Adw.Application):
         switch.connect("notify::active", _on_active_changed)
 
         box.append(label_box)
-        box.append(switch)
+        switch_row.append(switch)
+        switch_row.append(state_label)
+        box.append(switch_row)
         box.append(status_label)
         row.set_child(box)
         return row
@@ -1135,7 +1167,7 @@ class SamsungControl(Adw.Application):
         )
 
         card2 = self.create_card(controls_box2)
-        content.append(card2)
+        #content.append(card2)
 
         # Card 3: Performance Mode
         perf_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -1181,6 +1213,8 @@ class SamsungControl(Adw.Application):
         card3.add_css_class("perf-mode-card")
         content.append(card3)
 
+        content.append(card2)
+
         scrolled.set_child(content)
         return scrolled
 
@@ -1215,7 +1249,7 @@ class SamsungControl(Adw.Application):
         controls_box1.set_selection_mode(Gtk.SelectionMode.NONE)
         controls_box1.append(self.create_language_row())
         card1 = self.create_card(controls_box1)
-        content.append(card1)
+        #content.append(card1)
 
         # Card 1.5: Theme selection
         controls_theme = Gtk.ListBox()
@@ -1223,7 +1257,7 @@ class SamsungControl(Adw.Application):
         controls_theme.set_selection_mode(Gtk.SelectionMode.NONE)
         controls_theme.append(self.create_theme_row())
         card1_5 = self.create_card(controls_theme)
-        content.append(card1_5)
+        #content.append(card1_5)
 
         # Card 2: Start on Lid Open
         controls_box2 = Gtk.ListBox()
@@ -1270,6 +1304,9 @@ class SamsungControl(Adw.Application):
             )
             card4 = self.create_card(controls_box4)
             content.append(card4)
+
+        content.append(card1_5)
+        content.append(card1)
 
         scrolled.set_child(content)
         return scrolled
