@@ -3,7 +3,53 @@ import time
 from collections import deque
 
 import cairo
-from gi.repository import GLib, Gtk, Gdk
+from gi.repository import GLib, Gtk, Gdk, Pango, PangoCairo
+
+
+def _draw_text(widget, cr, text, x, y, *, size_pt=10, rgba=(0.7, 0.7, 0.7, 0.8), xalign=0.0, yalign=0.0):
+    """Draw text using the system font (GTK setting) via PangoCairo.
+
+    Cairo's toy text API (cr.show_text) does not reliably match the system font.
+    Using Pango ensures we follow the desktop's configured font family.
+    xalign/yalign: 0.0 = left/top, 0.5 = center, 1.0 = right/bottom.
+    """
+    try:
+        layout = widget.create_pango_layout(text)
+    except Exception:
+        # Very old bindings fallback: don't crash the draw call.
+        cr.save()
+        cr.set_source_rgba(*rgba)
+        cr.move_to(x, y)
+        cr.show_text(text)
+        cr.restore()
+        return (0, 0)
+
+    font_name = None
+    try:
+        settings = Gtk.Settings.get_default()
+        if settings:
+            font_name = settings.get_property("gtk-font-name")
+    except Exception:
+        font_name = None
+
+    desc = Pango.FontDescription.from_string(font_name or "Sans")
+    try:
+        desc.set_size(int(size_pt * Pango.SCALE))
+    except Exception:
+        pass
+    layout.set_font_description(desc)
+
+    w, h = layout.get_pixel_size()
+    x = x - (w * float(xalign))
+    y = y - (h * float(yalign))
+
+    cr.save()
+    cr.set_source_rgba(*rgba)
+    cr.move_to(x, y)
+    PangoCairo.update_layout(cr, layout)
+    PangoCairo.show_layout(cr, layout)
+    cr.restore()
+    return (w, h)
 
 
 class FanSpeedGraph(Gtk.DrawingArea):
@@ -35,21 +81,35 @@ class FanSpeedGraph(Gtk.DrawingArea):
             cr.move_to(x, 0)
             cr.line_to(x, height - 30)
             if i < 6:
-                cr.move_to(x + 5, height - 10)
-                cr.set_source_rgba(0.7, 0.7, 0.7, 0.8)
-                cr.set_font_size(10)
-                cr.show_text(f"{-60 + i*10}s")
+                _draw_text(
+                    area,
+                    cr,
+                    f"{-60 + i*10}s",
+                    x + 5,
+                    height - 12,
+                    size_pt=10,
+                    rgba=(0.7, 0.7, 0.7, 0.8),
+                    xalign=0.0,
+                    yalign=1.0,
+                )
 
         steps = 5
         for i in range(steps + 1):
             y = (height - 30) * i / steps
             cr.move_to(0, y)
             cr.line_to(width, y)
-            cr.move_to(5, y + 15)
-            cr.set_source_rgba(0.7, 0.7, 0.7, 0.8)
-            cr.set_font_size(10)
             rpm = int(self.max_speed * (steps - i) / steps)
-            cr.show_text(f"{rpm:,} RPM")
+            _draw_text(
+                area,
+                cr,
+                f"{rpm:,} RPM",
+                5,
+                y + 15,
+                size_pt=10,
+                rgba=(0.7, 0.7, 0.7, 0.8),
+                xalign=0.0,
+                yalign=1.0,
+            )
 
         cr.set_source_rgba(0.3, 0.3, 0.3, 0.5)
         cr.stroke()
@@ -158,15 +218,31 @@ class TimeSeriesGraph(Gtk.DrawingArea):
             cr.move_to(left_pad, y)
             cr.line_to(left_pad + plot_width, y)
             cr.stroke()
-            cr.set_font_size(10)
-            cr.set_source_rgba(0.7, 0.7, 0.7, 0.8)
             val = int(self.max_value * (steps - i) / steps)
             if self.max_value == 100:
-                cr.move_to(left_pad + plot_width + 5, y + 4)
-                cr.show_text(f"{val}%")
+                _draw_text(
+                    area,
+                    cr,
+                    f"{val}%",
+                    left_pad + plot_width + 5,
+                    y,
+                    size_pt=10,
+                    rgba=(0.7, 0.7, 0.7, 0.8),
+                    xalign=0.0,
+                    yalign=0.5,
+                )
             else:
-                cr.move_to(left_pad + plot_width + 5, y + 4)
-                cr.show_text(f"{val}")
+                _draw_text(
+                    area,
+                    cr,
+                    f"{val}",
+                    left_pad + plot_width + 5,
+                    y,
+                    size_pt=10,
+                    rgba=(0.7, 0.7, 0.7, 0.8),
+                    xalign=0.0,
+                    yalign=0.5,
+                )
 
         if not self.data_points:
             return
@@ -200,16 +276,23 @@ class TimeSeriesGraph(Gtk.DrawingArea):
             cr.set_source(grad)
             cr.fill()
 
-        cr.set_font_size(10)
-        cr.set_source_rgba(0.7, 0.7, 0.7, 0.8)
         if self.time_window >= 12 * 3600:
             hours_span = max(1, int(self.time_window // 3600))
             for i in range(0, hours_span + 1, 1):
                 label_time = start_time + (i * 3600)
                 hour = time.localtime(label_time).tm_hour
                 x = left_pad + plot_width * i / hours_span
-                cr.move_to(x - 10, top_pad + plot_height + 25)
-                cr.show_text(f"{hour}h")
+                _draw_text(
+                    area,
+                    cr,
+                    f"{hour}h",
+                    x,
+                    top_pad + plot_height + 25,
+                    size_pt=10,
+                    rgba=(0.7, 0.7, 0.7, 0.8),
+                    xalign=0.5,
+                    yalign=0.5,
+                )
 
 
 class FanIcon(Gtk.DrawingArea):
@@ -511,12 +594,18 @@ class BatteryThresholdSlider(Gtk.DrawingArea):
             cr.fill()
             
             # Draw mark label
-            cr.set_source_rgba(0.7, 0.7, 0.7, 0.8)
-            cr.set_font_size(10)
             label = f"{mark}%"
-            (x_bearing, y_bearing, text_width, text_height, x_advance, y_advance) = cr.text_extents(label)
-            cr.move_to(mark_x - text_width / 2, slider_y + mark_radius + 18)
-            cr.show_text(label)
+            _draw_text(
+                area,
+                cr,
+                label,
+                mark_x,
+                slider_y + mark_radius + 18,
+                size_pt=10,
+                rgba=(0.7, 0.7, 0.7, 0.8),
+                xalign=0.5,
+                yalign=0.0,
+            )
         
         # Draw thumb/handle
         thumb_x = slider_x + filled_width
@@ -548,9 +637,15 @@ class BatteryThresholdSlider(Gtk.DrawingArea):
             cr.stroke()
             
             # Tooltip text
-            cr.set_source_rgb(1, 1, 1)
-            cr.set_font_size(12)
             label = f"{self.current_value}%"
-            (x_bearing, y_bearing, text_width, text_height, x_advance, y_advance) = cr.text_extents(label)
-            cr.move_to(tooltip_x - text_width / 2, tooltip_y + text_height / 2)
-            cr.show_text(label)
+            _draw_text(
+                area,
+                cr,
+                label,
+                tooltip_x,
+                tooltip_y - 5,
+                size_pt=12,
+                rgba=(1.0, 1.0, 1.0, 1.0),
+                xalign=0.5,
+                yalign=0.5,
+            )

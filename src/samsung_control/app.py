@@ -762,7 +762,7 @@ class SamsungControl(Adw.Application):
             avatar_container.append(fallback_label)
 
         # User info
-        user_info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        user_info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         user_info_box.set_valign(Gtk.Align.CENTER)  # Center vertically with avatar
         user_info_box.set_margin_start(12)  # Space between avatar and text
         user_info_box.set_hexpand(True)  # Expand to push avatar to the right
@@ -773,6 +773,7 @@ class SamsungControl(Adw.Application):
         user_status_label = Gtk.Label(label=self._get_os_name())
         user_status_label.add_css_class("user-status")
         user_status_label.set_xalign(0)
+        user_status_label.set_margin_top(8)
         
         user_info_box.append(user_name_label)
         user_info_box.append(user_status_label)
@@ -784,8 +785,10 @@ class SamsungControl(Adw.Application):
 
         # Separator
         separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-        separator.set_margin_start(12)  # Add padding from left edge
-        separator.set_margin_end(12)    # Add padding from right edge
+        separator.set_margin_start(25)  # Add padding from left edge
+        separator.set_margin_end(25)    # Add padding from right edge
+        separator.set_margin_top(10)     # Small vertical breathing room
+        separator.set_margin_bottom(10)  # Small vertical breathing room
         #sidebar.append(separator)
 
         # Menu items (use app-provided icons) - with descriptions
@@ -797,6 +800,8 @@ class SamsungControl(Adw.Application):
         ]
 
         for page_name, label, icon_name, description in menu_items:
+            if page_name == "monitor":
+                sidebar.append(separator)
             button = self.create_sidebar_button(label, icon_name, page_name, description)
             sidebar.append(button)
 
@@ -928,10 +933,6 @@ class SamsungControl(Adw.Application):
 
         # Card 3: Performance Mode
         perf_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        perf_box.set_margin_top(12)
-        perf_box.set_margin_bottom(12)
-        perf_box.set_margin_start(12)
-        perf_box.set_margin_end(12)
 
         perf_title = Gtk.Label(label=self.t("perf_mode"), xalign=0)
         perf_title.add_css_class("heading")
@@ -971,6 +972,7 @@ class SamsungControl(Adw.Application):
             perf_box.append(profiles_box)
 
         card3 = self.create_card(perf_box)
+        card3.add_css_class("perf-mode-card")
         content.append(card3)
 
         scrolled.set_child(content)
@@ -1968,6 +1970,9 @@ class SamsungControl(Adw.Application):
         # do not force vertical expansion; height should match contents
         # individual views (e.g. monitor graphs) may still call set_vexpand
         card.add_css_class("card")
+        # Local overrides for the right-side "panel" cards (padding/radius).
+        # Keep `.card` so libadwaita provides the base styling.
+        card.add_css_class("sc-card")
         card.append(child)
         return card
 
