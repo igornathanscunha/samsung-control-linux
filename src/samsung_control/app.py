@@ -700,7 +700,7 @@ class SamsungControl(Adw.Application):
         avatar_container.add_css_class("user-avatar")
         
         if avatar_image:
-            avatar_image.set_size_request(48, 48)
+            avatar_image.set_size_request(60, 60)
             avatar_container.append(avatar_image)
         else:
             # Fallback: show initials or default icon
@@ -710,30 +710,37 @@ class SamsungControl(Adw.Application):
 
         # User info
         user_info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        user_info_box.set_valign(Gtk.Align.CENTER)  # Center vertically with avatar
+        user_info_box.set_margin_start(12)  # Space between avatar and text
+        user_info_box.set_hexpand(True)  # Expand to push avatar to the right
         user_name_label = Gtk.Label(label=user_gecos)
         user_name_label.add_css_class("user-name")
         user_name_label.set_xalign(0)
         
-        user_status_label = Gtk.Label(label="Profile • User")
+        user_status_label = Gtk.Label(label=self._get_os_name())
         user_status_label.add_css_class("user-status")
         user_status_label.set_xalign(0)
         
         user_info_box.append(user_name_label)
         user_info_box.append(user_status_label)
         
-        profile_box.append(avatar_container)
+        # Add user info first (left), then avatar (right)
         profile_box.append(user_info_box)
+        profile_box.append(avatar_container)
         sidebar.append(profile_box)
 
         # Separator
         separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-        sidebar.append(separator)
+        separator.set_margin_start(12)  # Add padding from left edge
+        separator.set_margin_end(12)    # Add padding from right edge
+        #sidebar.append(separator)
 
         # Menu items (use app-provided icons) - with descriptions
         menu_items = [
             ("battery", self.t("menu_battery_perf"), "samsung-battery", "Performance mode, battery threshold"),
             ("advanced", self.t("menu_advanced"), "samsung-settings", "Quick settings, keyboard light"),
             ("monitor", self.t("menu_monitor"), "samsung-graph", "Fan speed, CPU, battery info"),
+            ("about", self.t("menu_about_device"), "samsung-about", "System and hardware info"),
         ]
 
         for page_name, label, icon_name, description in menu_items:
@@ -769,9 +776,10 @@ class SamsungControl(Adw.Application):
         local_icons_dir = os.path.join(root_dir, "assets", "icons")
         # Map icon_name to file names we installed in install.sh
         local_icon_map = {
-            "samsung-battery": "battery.svg",
-            "samsung-settings": "settings.svg",
-            "samsung-graph": "graph.svg",
+            "samsung-battery": "charging.png",
+            "samsung-settings": "creative.png",
+            "samsung-graph": "graphic.png",
+            "samsung-about": "information.png",
         }
 
         loaded_icon = False
@@ -780,7 +788,7 @@ class SamsungControl(Adw.Application):
             if os.path.exists(local_path):
                 try:
                     icon = Gtk.Image.new_from_file(local_path)
-                    icon.set_pixel_size(32)
+                    icon.set_pixel_size(44)
                     icon_container.append(icon)
                     loaded_icon = True
                 except Exception:
@@ -789,7 +797,7 @@ class SamsungControl(Adw.Application):
         if not loaded_icon:
             try:
                 icon = Gtk.Image.new_from_icon_name(icon_name)
-                icon.set_pixel_size(32)
+                icon.set_pixel_size(44)
                 icon_container.append(icon)
             except:
                 pass
@@ -832,6 +840,12 @@ class SamsungControl(Adw.Application):
         content.set_margin_bottom(24)
         content.set_margin_start(24)
         content.set_margin_end(24)
+
+        # Add page title
+        page_title = Gtk.Label(label=self.t("page_battery_perf"))
+        page_title.add_css_class("page-title")
+        page_title.set_xalign(0)
+        content.append(page_title)
 
         # Battery controls - Card 1: Battery Threshold
         controls_box1 = Gtk.ListBox()
@@ -928,6 +942,12 @@ class SamsungControl(Adw.Application):
         content.set_margin_start(24)
         content.set_margin_end(24)
 
+        # Add page title
+        page_title = Gtk.Label(label=self.t("page_advanced"))
+        page_title.add_css_class("page-title")
+        page_title.set_xalign(0)
+        content.append(page_title)
+
         # Card 1: Language
         controls_box1 = Gtk.ListBox()
         controls_box1.add_css_class("boxed-list")
@@ -997,6 +1017,12 @@ class SamsungControl(Adw.Application):
         content.set_margin_start(24)
         content.set_margin_end(24)
 
+        # Add page title
+        page_title = Gtk.Label(label=self.t("page_monitor"))
+        page_title.add_css_class("page-title")
+        page_title.set_xalign(0)
+        content.append(page_title)
+
         # Menu para selecionar entre Battery, CPU Usage, Fan Speed
         menu_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
 
@@ -1040,6 +1066,288 @@ class SamsungControl(Adw.Application):
         """Muda a visualização do gráfico para fan, cpu ou battery"""
         if self.monitor_stack:
             self.monitor_stack.set_visible_child_name(mode)
+
+    def create_about_device_page(self):
+        """Create About Device page with system and hardware information"""
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scrolled.add_css_class("page-content")
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        content.set_margin_top(24)
+        content.set_margin_bottom(24)
+        content.set_margin_start(24)
+        content.set_margin_end(24)
+
+        # Add page title
+        page_title = Gtk.Label(label=self.t("page_about"))
+        page_title.add_css_class("page-title")
+        page_title.set_xalign(0)
+        content.append(page_title)
+
+        # Hardware Information Card
+        hw_box = Gtk.ListBox()
+        hw_box.add_css_class("boxed-list")
+        hw_box.set_selection_mode(Gtk.SelectionMode.NONE)
+
+        hw_card_header = Gtk.Label(label=self.t("hardware_info"))
+        hw_card_header.add_css_class("heading")
+        hw_card_header.set_margin_top(12)
+        hw_card_header.set_margin_start(12)
+        hw_card_header.set_xalign(0)
+        content.append(hw_card_header)
+
+        # Model
+        model = self._get_model_info()
+        hw_box.append(self._create_info_row(self.t("model"), model))
+
+        # Memory
+        memory = self._get_memory_info()
+        hw_box.append(self._create_info_row(self.t("memory"), memory))
+
+        # Processor
+        processor = self._get_processor_info()
+        hw_box.append(self._create_info_row(self.t("processor"), processor))
+
+        # Graphics
+        graphics = self._get_graphics_info()
+        hw_box.append(self._create_info_row(self.t("graphics"), graphics))
+
+        # Disk Capacity
+        disk_capacity = self._get_disk_capacity()
+        hw_box.append(self._create_info_row(self.t("disk_capacity"), disk_capacity))
+
+        hw_card = self.create_card(hw_box)
+        content.append(hw_card)
+
+        # Software Information Card
+        sw_box = Gtk.ListBox()
+        sw_box.add_css_class("boxed-list")
+        sw_box.set_selection_mode(Gtk.SelectionMode.NONE)
+
+        sw_card_header = Gtk.Label(label=self.t("software_info"))
+        sw_card_header.add_css_class("heading")
+        sw_card_header.set_margin_top(12)
+        sw_card_header.set_margin_start(12)
+        sw_card_header.set_xalign(0)
+        content.append(sw_card_header)
+
+        # Firmware Version
+        firmware = self._get_firmware_version()
+        sw_box.append(self._create_info_row(self.t("firmware_version"), firmware))
+
+        # OS Name
+        os_name = self._get_os_name()
+        sw_box.append(self._create_info_row(self.t("os_name"), os_name))
+
+        # OS Type
+        os_type = self._get_os_type()
+        sw_box.append(self._create_info_row(self.t("os_type"), os_type))
+
+        # GNOME Version
+        gnome_version = self._get_gnome_version()
+        sw_box.append(self._create_info_row(self.t("gnome_version"), gnome_version))
+
+        # Windowing System
+        windowing_system = self._get_windowing_system()
+        sw_box.append(self._create_info_row(self.t("windowing_system"), windowing_system))
+
+        # Kernel Version
+        kernel_version = self._get_kernel_version()
+        sw_box.append(self._create_info_row(self.t("kernel_version"), kernel_version))
+
+        sw_card = self.create_card(sw_box)
+        content.append(sw_card)
+
+        scrolled.set_child(content)
+        return scrolled
+
+    def _create_info_row(self, label, value):
+        """Create a row showing label and value"""
+        row = Gtk.ListBoxRow()
+        row.set_selectable(False)
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        box.set_margin_top(8)
+        box.set_margin_bottom(8)
+        box.set_margin_start(12)
+        box.set_margin_end(12)
+
+        label_widget = Gtk.Label(label=label)
+        label_widget.add_css_class("subtitle")
+        label_widget.set_xalign(0)
+        label_widget.set_hexpand(True)
+
+        value_widget = Gtk.Label(label=value)
+        value_widget.add_css_class("heading")
+        value_widget.set_xalign(1)
+
+        box.append(label_widget)
+        box.append(value_widget)
+        row.set_child(box)
+        return row
+
+    def _get_os_name(self):
+        """Get operating system name (e.g., Ubuntu 24.04.4 LTS)"""
+        try:
+            with open("/etc/os-release", "r") as f:
+                for line in f:
+                    if line.startswith("PRETTY_NAME"):
+                        # Extract value from PRETTY_NAME="Ubuntu 24.04.4 LTS"
+                        value = line.split("=", 1)[1].strip().strip('"')
+                        return value
+        except Exception:
+            pass
+        try:
+            # Fallback: try /etc/lsb-release
+            name = None
+            version = None
+            with open("/etc/lsb-release", "r") as f:
+                for line in f:
+                    if line.startswith("DISTRIB_DESCRIPTION"):
+                        value = line.split("=", 1)[1].strip().strip('"')
+                        return value
+        except Exception:
+            pass
+        return "Unknown"
+
+    def _get_kernel_version(self):
+        """Get kernel version"""
+        try:
+            with open("/proc/version", "r") as f:
+                version_line = f.read().strip()
+                # Extract kernel version from /proc/version
+                parts = version_line.split()
+                if len(parts) > 2:
+                    return parts[2]
+            return "Unknown"
+        except Exception:
+            return "Unknown"
+
+    def _get_processor_info(self):
+        """Get processor information"""
+        try:
+            with open("/proc/cpuinfo", "r") as f:
+                for line in f:
+                    if "model name" in line:
+                        return line.split(":")[-1].strip()
+            return "Unknown"
+        except Exception:
+            return "Unknown"
+
+    def _get_memory_info(self):
+        """Get total system memory"""
+        try:
+            with open("/proc/meminfo", "r") as f:
+                for line in f:
+                    if "MemTotal" in line:
+                        kb = int(line.split()[-2])
+                        gb = kb / (1024 * 1024)
+                        return f"{gb:.1f} GB"
+            return "Unknown"
+        except Exception:
+            return "Unknown"
+
+    def _get_storage_info(self):
+        """Get storage information"""
+        try:
+            import shutil
+            stat = shutil.disk_usage("/")
+            total_gb = stat.total / (1024**3)
+            return f"{total_gb:.1f} GB"
+        except Exception:
+            return "Unknown"
+
+    def _get_disk_capacity(self):
+        """Get disk capacity information"""
+        return self._get_storage_info()
+
+    def _get_model_info(self):
+        """Get device model information"""
+        try:
+            with open("/sys/class/dmi/id/board_name", "r") as f:
+                model = f.read().strip()
+                if model:
+                    return model
+        except Exception:
+            pass
+        try:
+            with open("/sys/class/dmi/id/product_name", "r") as f:
+                return f.read().strip()
+        except Exception:
+            return "Unknown"
+
+    def _get_graphics_info(self):
+        """Get graphics/GPU information"""
+        try:
+            result = subprocess.run(
+                ["lspci"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            for line in result.stdout.split('\n'):
+                if 'VGA' in line or 'Display' in line or 'Graphics' in line:
+                    parts = line.split(': ', 1)
+                    if len(parts) > 1:
+                        return parts[1].strip()
+        except Exception:
+            pass
+        return "Unknown"
+
+    def _get_os_type(self):
+        """Get OS type (32-bit or 64-bit)"""
+        try:
+            import platform
+            if platform.architecture()[0] == '64bit':
+                return "64-bit"
+            elif platform.architecture()[0] == '32bit':
+                return "32-bit"
+        except Exception:
+            pass
+        return "Unknown"
+
+    def _get_gnome_version(self):
+        """Get GNOME version"""
+        try:
+            result = subprocess.run(
+                ["gnome-shell", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.stdout:
+                version = result.stdout.strip()
+                # Extract version number from "GNOME Shell X.Y.Z"
+                parts = version.split()
+                if len(parts) >= 3:
+                    return parts[-1]
+                return version
+        except Exception:
+            pass
+        return "Unknown"
+
+    def _get_windowing_system(self):
+        """Get windowing system (Wayland or X11)"""
+        try:
+            session_type = os.environ.get('XDG_SESSION_TYPE', '').strip()
+            if session_type:
+                return session_type.capitalize()
+        except Exception:
+            pass
+        return "Unknown"
+
+    def _get_firmware_version(self):
+        """Get firmware version"""
+        try:
+            # Try to read from DMI data
+            with open("/sys/class/dmi/id/system_version", "r") as f:
+                return f.read().strip()
+        except Exception:
+            try:
+                with open("/sys/firmware/efi/fw_platform_size", "r") as f:
+                    return f.read().strip()
+            except Exception:
+                return "Unknown"
 
     def create_fan_view(self):
         """View para gráfico de Fan Speed"""
@@ -1249,6 +1557,7 @@ class SamsungControl(Adw.Application):
         self.content_stack.add_named(self.create_battery_performance_page(), "battery")
         self.content_stack.add_named(self.create_advanced_features_page(), "advanced")
         self.content_stack.add_named(self.create_monitor_system_page(), "monitor")
+        self.content_stack.add_named(self.create_about_device_page(), "about")
 
         # Set default page
         self.content_stack.set_visible_child_name("battery")
@@ -1431,8 +1740,8 @@ class SamsungControl(Adw.Application):
         css = """
             /* Sidebar Styling */
             .sidebar {
-                background: transparent;
-                border-right: 1px solid alpha(@borders, 0.3);
+                background: @view_bg_color;
+                border-right: 1px solid alpha(@view_bg_color, 0.3);
             }
 
             .sidebar-title {
@@ -1482,7 +1791,7 @@ class SamsungControl(Adw.Application):
 
             .user-status {
                 font-size: 12px;
-                color: alpha(@card_fg_color, 0.6);
+                color: alpha(@accent_bg_color, 1);
             }
 
             .sidebar-button {
@@ -1543,9 +1852,10 @@ class SamsungControl(Adw.Application):
             }
 
             .page-title {
-                font-size: 28px;
+                font-size: 18px;
                 font-weight: bold;
                 color: @card_fg_color;
+                border-left: 10px solid @view_bg_color;
                 margin-bottom: 12px;
             }
 

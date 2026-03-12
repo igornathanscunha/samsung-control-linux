@@ -489,24 +489,23 @@ class BatteryThresholdSlider(Gtk.DrawingArea):
         cr.line_to(slider_x + filled_width, slider_y)
         cr.stroke()
         
-        # Draw marks
-        mark_height = 8
+        # Draw marks as circles
+        mark_radius = 4
         for mark in self.marks:
             mark_ratio = (mark - self.min_value) / (self.max_value - self.min_value)
             mark_x = slider_x + slider_width * mark_ratio
             
+            # Draw circle for mark
             cr.set_source_rgba(0.6, 0.6, 0.6, 0.7)
-            cr.set_line_width(2)
-            cr.move_to(mark_x, slider_y - mark_height)
-            cr.line_to(mark_x, slider_y + mark_height)
-            cr.stroke()
+            cr.arc(mark_x, slider_y, mark_radius, 0, 2 * math.pi)
+            cr.fill()
             
             # Draw mark label
             cr.set_source_rgba(0.7, 0.7, 0.7, 0.8)
             cr.set_font_size(10)
             label = f"{mark}%"
             (x_bearing, y_bearing, text_width, text_height, x_advance, y_advance) = cr.text_extents(label)
-            cr.move_to(mark_x - text_width / 2, slider_y + mark_height + 18)
+            cr.move_to(mark_x - text_width / 2, slider_y + mark_radius + 18)
             cr.show_text(label)
         
         # Draw thumb/handle

@@ -150,6 +150,20 @@ For more information about Samsung Galaxy Book Linux compatibility:
 
 > 💡 This code and the README text were produced with the help of AI prompts.
 
+## Icon Credits
+
+The application uses several icons sourced from Flaticon. According to the
+Flaticon license, attribution is required when using free icons in projects.
+
+- [Team icons](https://www.flaticon.com/free-icons/team) – created by Freepik
+  (via Flaticon)
+- [Battery icons](https://www.flaticon.com/free-icons/battery) – created by
+  Freepik (via Flaticon)
+- [Business graph icons](https://www.flaticon.com/free-icons/business-graph)
+  – created by Iconsmeet (via Flaticon)
+- [Info icons](https://www.flaticon.com/free-icons/info) – created by
+  riajulislam (via Flaticon)
+
 ## License
 
 [MIT License](LICENSE)
