@@ -62,10 +62,11 @@ install_deps() {
         *debian*|*ubuntu*|*linuxmint*|*pop*)
             apt-get update
             apt-get install -y python3-gi python3-gi-cairo gir1.2-gtk-4.0 libadwaita-1-0 \
-                gobject-introspection python3-cairo polkitd dbus x11-xserver-utils
+                gobject-introspection python3-cairo polkitd dbus x11-xserver-utils \
+                power-profiles-daemon
             ;;
         *fedora*|*rhel*|*centos*)
-            dnf install -y python3-gobject gtk4 libadwaita python3-cairo polkit dbus xorg-x11-server-utils
+            dnf install -y python3-gobject gtk4 libadwaita python3-cairo polkit dbus xorg-x11-server-utils power-profiles-daemon
             ;;
         *)
             echo "Unsupported distribution. Please install GTK4, libadwaita, Python GI, Cairo, polkit, dbus, and xhost manually."
@@ -105,6 +106,7 @@ if [ "$1" = "uninstall" ]; then
     # Remove installed binaries and wrapper
     rm -f /usr/local/bin/samsung-control
     rm -f /usr/local/bin/samsung-control-wrapper
+    rm -f /usr/local/bin/samsung-control-permissions
 
     # Remove desktop entry and icons
     rm -f /usr/share/applications/org.samsung.control.desktop
@@ -131,50 +133,18 @@ fi
 # Install dependencies
 install_deps
 
-# Create wrapper script
+# Create a wrapper script (kept for backwards compatibility with older .desktop files).
+#
+# Important: do NOT run the GUI as root. The installer already configures a `samsung`
+# group + udev rules so the app can access the relevant sysfs nodes as an unprivileged
+# user. Running the GUI via pkexec makes the app identify as `root` and breaks theme/
+# avatar detection.
 cat > /usr/local/bin/samsung-control-wrapper << 'EOL'
 #!/bin/bash
-
-# Function to get current desktop session user
-get_session_user() {
-    who | grep -E '(:0|tty7)' | head -1 | cut -d' ' -f1
-}
-
-if [ "$EUID" -eq 0 ]; then
-    # Get the user who is running the desktop session
-    DESKTOP_USER=$(get_session_user)
-    
-    # Get user's home directory
-    USER_HOME=$(getent passwd "$DESKTOP_USER" | cut -d: -f6)
-    
-    # Get DISPLAY if not set
-    if [ -z "$DISPLAY" ]; then
-        export DISPLAY=:0
-    fi
-    
-    # Get XAUTHORITY if not set
-    if [ -z "$XAUTHORITY" ]; then
-        export XAUTHORITY="$USER_HOME/.Xauthority"
-    fi
-    
-    # Get dbus session
-    DBUS_SESSION_BUS_ADDRESS=$(grep -z DBUS_SESSION_BUS_ADDRESS /proc/$(pgrep -u "$DESKTOP_USER" gnome-session|head -n1)/environ 2>/dev/null | tr '\0' '\n' | cut -d= -f2-)
-    if [ -n "$DBUS_SESSION_BUS_ADDRESS" ]; then
-        export DBUS_SESSION_BUS_ADDRESS
-    fi
-    
-    # Allow root to connect to X server
-    xhost +SI:localuser:root >/dev/null 2>&1
-    
-    # Run the application with proper environment
-    exec /usr/local/bin/samsung-control "$@"
-else
-    # If not root, use pkexec
-    exec pkexec samsung-control-wrapper "$@"
-fi
+exec /usr/local/bin/samsung-control "$@"
 EOL
 
-chmod +x /usr/local/bin/samsung-control-wrapper
+chmod 0755 /usr/local/bin/samsung-control-wrapper
 
 # Copy program (source files are now under src/ when script is in project root)
 install -Dm755 "$SCRIPT_DIR/src/samsung-control.py" /usr/local/bin/samsung-control
@@ -184,16 +154,13 @@ cp -r "$SCRIPT_DIR/src/samsung_control/"* /usr/local/bin/samsung_control/
 # Install icons (now stored under assets/ at repository root)
 ICON_DIR="$SCRIPT_DIR/assets/icons"
 install -Dm644 "$ICON_DIR/samsung-control.svg" /usr/share/icons/hicolor/scalable/apps/samsung-control.svg
-install -Dm644 "$ICON_DIR/battery.svg" /usr/share/icons/hicolor/scalable/apps/samsung-battery.svg
-install -Dm644 "$ICON_DIR/settings.svg" /usr/share/icons/hicolor/scalable/apps/samsung-settings.svg
-install -Dm644 "$ICON_DIR/graph.svg" /usr/share/icons/hicolor/scalable/apps/samsung-graph.svg
 
 # Copy desktop entry with updated icon name
 cat > /usr/share/applications/org.samsung.control.desktop << EOL
 [Desktop Entry]
 Name=Samsung Galaxy Book Control
 Comment=Control Samsung Galaxy Book features
-Exec=samsung-control-wrapper
+Exec=samsung-control
 Icon=samsung-control
 Terminal=false
 StartupWMClass=org.samsung.control
@@ -202,26 +169,9 @@ Categories=Settings;HardwareSettings;
 Keywords=samsung;galaxybook;laptop;control;
 EOL
 
-# Create polkit policy
-cat > /usr/share/polkit-1/actions/org.samsung.control.policy << EOL
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE policyconfig PUBLIC
- "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
- "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
-<policyconfig>
-  <action id="org.samsung.control">
-    <description>Run Samsung Galaxy Book Control</description>
-    <message>Authentication is required to control Samsung Galaxy Book settings</message>
-    <defaults>
-      <allow_any>auth_admin</allow_any>
-      <allow_inactive>auth_admin</allow_inactive>
-      <allow_active>yes</allow_active>
-    </defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/samsung-control-wrapper</annotate>
-    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
-  </action>
-</policyconfig>
-EOL
+# NOTE: We intentionally do not install a polkit action to run the whole GUI as root.
+# Access is managed via group permissions + udev rules further below.
+rm -f /usr/share/polkit-1/actions/org.samsung.control.policy 2>/dev/null || true
 
 # Create a dedicated group for device access and add installer user to it
 groupadd -f samsung >/dev/null 2>&1
@@ -255,6 +205,59 @@ EOL
 # Reload udev and trigger to apply rules immediately
 udevadm control --reload-rules
 udevadm trigger
+
+# Install a best-effort permissions fixer for sysfs nodes.
+cat > /usr/local/bin/samsung-control-permissions << 'EOL'
+#!/bin/bash
+set -euo pipefail
+
+apply_one() {
+  local p="$1"
+  [ -e "$p" ] || return 0
+  chgrp samsung "$p" 2>/dev/null || true
+  chmod 0660 "$p" 2>/dev/null || true
+}
+
+apply_glob() {
+  local g="$1"
+  shopt -s nullglob
+  local paths=( $g )
+  shopt -u nullglob
+  local p
+  for p in "${paths[@]}"; do
+    apply_one "$p"
+  done
+}
+
+apply_one /sys/firmware/acpi/platform_profile
+apply_glob "/sys/class/power_supply/BAT*/charge_control_end_threshold"
+apply_glob "/sys/class/firmware-attributes/samsung-galaxybook/attributes/*/current_value"
+apply_glob "/sys/class/leds/samsung-galaxybook::kbd_backlight/*brightness*"
+
+if [ -d /dev/samsung-galaxybook ]; then
+  chgrp -R samsung /dev/samsung-galaxybook 2>/dev/null || true
+  chmod -R 0660 /dev/samsung-galaxybook 2>/dev/null || true
+fi
+EOL
+chmod 0755 /usr/local/bin/samsung-control-permissions
+
+cat > /etc/systemd/system/samsung-control-permissions.service << 'EOL'
+[Unit]
+Description=Samsung Control - Apply sysfs/device permissions
+After=systemd-udevd.service
+Wants=systemd-udevd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/samsung-control-permissions
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+systemctl daemon-reload 2>/dev/null || true
+systemctl enable --now samsung-control-permissions.service 2>/dev/null || true
+/usr/local/bin/samsung-control-permissions 2>/dev/null || true
 
 # Apply initial permissions to existing files (best-effort)
 chgrp samsung /sys/firmware/acpi/platform_profile 2>/dev/null || true

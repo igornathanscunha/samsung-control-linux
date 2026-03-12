@@ -158,7 +158,9 @@ class SamsungControl(Adw.Application):
             logging.warning(f"Attribute {attr} not found: {path}")
             return None
         except PermissionError:
-            logging.error(f"Permission denied reading {attr}. Try running with sudo.")
+            logging.error(
+                f"Permission denied reading {attr}. Ensure your user is in the 'samsung' group and re-login (udev rules from install.sh)."
+            )
             return None
         except Exception as e:
             logging.error(f"Error reading {attr}: {str(e)}")
@@ -187,7 +189,7 @@ class SamsungControl(Adw.Application):
             return "not_found"
         except PermissionError:
             logging.error(
-                f"Permission denied when writing to {attr}. Try running the program with sudo."
+                f"Permission denied when writing to {attr}. Ensure your user is in the 'samsung' group and re-login (udev rules from install.sh)."
             )
             return "permission_denied"
         except Exception as e:
@@ -653,8 +655,10 @@ class SamsungControl(Adw.Application):
                 # Write to kernel failed, but configuration was saved
                 logging.warning(f"Failed to write {attr} to kernel module. Result: {result}")
                 if result == "permission_denied":
-                    logging.warning(f"Permission denied writing to {attr}. The application may need to be run with sudo.")
-                    logging.info(f"Try running with: sudo {' '.join(sys.argv)}")
+                    logging.warning(
+                        f"Permission denied writing to {attr}. This is usually a permissions/group issue; running the full GUI as root is not recommended."
+                    )
+                    logging.info("Fix: ensure your user is in the 'samsung' group, and log out/in so udev rule permissions apply.")
                 elif result == "not_found":
                     logging.warning(f"Attribute {attr} not found. The kernel module may not support this feature or is not loaded.")
                 # Note: We do NOT revert the switch - the user's preference is saved and will be applied when possible
@@ -700,7 +704,18 @@ class SamsungControl(Adw.Application):
 
         # Get current user info
         try:
-            current_user = pwd.getpwuid(os.getuid())
+            # If the process was started elevated (e.g. pkexec/sudo), show the
+            # invoking user's profile in the UI. Running the full GUI as root is
+            # not recommended, but this avoids confusing "root" identity/avatars.
+            ui_uid = os.getuid()
+            if ui_uid == 0:
+                for key in ("PKEXEC_UID", "SUDO_UID"):
+                    val = os.environ.get(key, "").strip()
+                    if val.isdigit():
+                        ui_uid = int(val)
+                        break
+
+            current_user = pwd.getpwuid(ui_uid)
             username = current_user.pw_name
             user_gecos = current_user.pw_gecos or username
             

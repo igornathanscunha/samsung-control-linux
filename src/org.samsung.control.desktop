@@ -1,7 +1,8 @@
 [Desktop Entry]
 Name=Samsung Galaxy Book Control
 Comment=Control Samsung Galaxy Book features
-Exec=samsung-control-wrapper
+Exec=samsung-control
+# The GUI should run unprivileged; permissions are handled via group + udev rules.
 Icon=samsung-control
 Terminal=false
 StartupWMClass=org.samsung.control

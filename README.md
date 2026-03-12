@@ -126,6 +126,14 @@ sudo ./install.sh
 After installation, you will find “Samsung Galaxy Book Control” in your
 applications menu.
 
+Notes:
+
+- The GUI is meant to run as your normal user (not as `root`). The installer
+  configures a `samsung` group plus udev rules so the app can access the
+  relevant sysfs/device nodes without elevating the whole UI.
+- If you just installed it, log out and back in so the new group membership
+  takes effect.
+
 ### Uninstalling
 
 To remove the application and all its components:
