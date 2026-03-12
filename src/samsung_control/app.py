@@ -9,7 +9,30 @@ import time
 from collections import deque
 from pathlib import Path
 
-from gi.repository import Adw, Gdk, Gio, GLib, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk, GdkPixbuf
+import cairo
+
+
+# helper to convert a square pixbuf into a circular version
+
+def make_circular_pixbuf(pixbuf):
+    """Return a new GdkPixbuf with the contents of *pixbuf* clipped to a circle.
+    If the source is not square the circle uses the smaller dimension.
+    """
+    w = pixbuf.get_width()
+    h = pixbuf.get_height()
+    size = min(w, h)
+    # create cairo surface and draw masked image
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, size)
+    cr = cairo.Context(surface)
+    cr.arc(size / 2, size / 2, size / 2, 0, 2 * math.pi)
+    cr.clip()
+    # center the source pixbuf
+    dx = (size - w) / 2
+    dy = (size - h) / 2
+    Gdk.cairo_set_source_pixbuf(cr, pixbuf, dx, dy)
+    cr.paint()
+    return Gdk.pixbuf_get_from_surface(surface, 0, 0, size, size)
 
 from .i18n import TRANSLATIONS
 from .widgets import BatteryIcon, CPUIcon, FanIcon, FanSpeedGraph, TimeSeriesGraph, BatteryThresholdSlider
@@ -655,7 +678,11 @@ class SamsungControl(Adw.Application):
             for avatar_path in avatar_paths:
                 if os.path.exists(avatar_path):
                     try:
-                        avatar_image = Gtk.Image.new_from_file(avatar_path)
+                        # load and scale to expected size
+                        pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(avatar_path, 48, 48, True)
+                        # make it circular and wrap in Gtk.Image
+                        circ = make_circular_pixbuf(pb)
+                        avatar_image = Gtk.Image.new_from_pixbuf(circ)
                         avatar_image.set_size_request(48, 48)
                         avatar_image.add_css_class("user-avatar-image")
                         break
@@ -1426,6 +1453,7 @@ class SamsungControl(Adw.Application):
                 min-width: 48px;
                 min-height: 48px;
                 border-radius: 50%;
+                overflow: hidden; /* ensure contained image is clipped */
                 background: alpha(@accent_bg_color, 0.15);
                 color: @accent_bg_color;
                 font-weight: 600;
@@ -1436,6 +1464,14 @@ class SamsungControl(Adw.Application):
                 font-weight: 600;
                 font-size: 18px;
                 color: @accent_bg_color;
+            }
+
+            /* ensure photos are clipped to a circle */
+            .user-avatar-image {
+                border-radius: 50%;
+                /* make sure the image fills its box and is not distorted */
+                min-width: 48px;
+                min-height: 48px;
             }
 
             .user-name {
@@ -1597,7 +1633,8 @@ class SamsungControl(Adw.Application):
 
     def create_card(self, child):
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        card.set_vexpand(True)  # Allow vertical expansion
+        # do not force vertical expansion; height should match contents
+        # individual views (e.g. monitor graphs) may still call set_vexpand
         card.add_css_class("card")
         card.append(child)
         return card

@@ -395,6 +395,9 @@ class BatteryThresholdSlider(Gtk.DrawingArea):
         self.dragging = False
         self.show_tooltip = False
         self.tooltip_value = ""
+        # store drag start coordinates and starting value for proper updates
+        self._drag_start_x = 0
+        self._start_value = self.current_value
         
         # Event controllers
         self.drag_controller = Gtk.GestureDrag.new()
@@ -422,14 +425,20 @@ class BatteryThresholdSlider(Gtk.DrawingArea):
         self.callback = callback
     
     def on_drag_begin(self, gesture, offset_x, offset_y):
+        # offset_x/offset_y are the starting pointer coordinates relative to the widget
         self.dragging = True
         self.show_tooltip = True
-        # Don't update value here, just start dragging
+        self._drag_start_x = offset_x
+        self._start_value = self.current_value
+        # show tooltip with initial value
+        self.tooltip_value = f"{self.current_value}%"
         self.queue_draw()
     
     def on_drag_update(self, gesture, offset_x, offset_y):
         if self.dragging:
-            self.update_value_from_position(offset_x)
+            # convert relative movement into absolute x coordinate
+            absolute_x = self._drag_start_x + offset_x
+            self.update_value_from_position(absolute_x)
             self.queue_draw()
     
     def on_drag_end(self, gesture, offset_x, offset_y):
