@@ -81,10 +81,10 @@ work offline.
 
 | Mode | Single-Core | Multi-Core | Notes |
 |------|-------------|------------|--------|
-| [Performance](https://browser.geekbench.com/v6/cpu/9702316) | 2372 | 10407 | Maximum performance |
-| [Balanced](https://browser.geekbench.com/v6/cpu/9702378) | 2403 | 10404 | No performance loss when plugged in |
-| [Quiet](https://browser.geekbench.com/v6/cpu/9702538) | 1215 | 4588 | Silent operation, ~50% performance |
-| [Low-power](https://browser.geekbench.com/v6/cpu/9702639) | 1204 | 4607 | Power-efficient, similar to quiet mode |
+| [Performance](https://browser.geekbench.com/v6/cpu/9702316) | 2369 | 7154 | Maximum performance |
+| [Balanced](https://browser.geekbench.com/v6/cpu/9702378) | 2054 | 6520 | No performance loss when plugged in |
+| [Quiet](https://browser.geekbench.com/v6/cpu/9702538) | 1187 | 3183 | Silent operation, ~50% performance |
+| [Low-power](https://browser.geekbench.com/v6/cpu/9702639) | 1183 | 3184 | Power-efficient, similar to quiet mode |
 
 [Performance/ Balanced vs. Quiet/ Low-power](https://browser.geekbench.com/v6/cpu/compare/9702538?baseline=9702316)
 
